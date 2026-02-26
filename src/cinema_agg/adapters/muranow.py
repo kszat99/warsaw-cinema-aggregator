@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from bs4 import BeautifulSoup
 from datetime import date, datetime
@@ -11,17 +12,16 @@ from ..normalize import normalize_title, extract_language_and_tags
 class MuranowAdapter(BaseAdapter):
     def __init__(self, cinema_id: str, cinema_name: str, base_url: str):
         super().__init__(cinema_id, cinema_name, base_url)
-        self._movie_cache = {} # URL -> {duration_min, language, tags}
+        self._movie_cache = {} # URL -> {duration_min, language, tags, poster_url}
 
-    async def _fetch_movie_details(self, movie_url: str):
+    async def _fetch_movie_details(self, client: httpx.AsyncClient, movie_url: str):
         """Fetch and parse movie detail page for duration and language."""
         if movie_url in self._movie_cache:
             return self._movie_cache[movie_url]
             
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(movie_url, timeout=20.0)
-                resp.raise_for_status()
+            resp = await client.get(movie_url, timeout=20.0)
+            resp.raise_for_status()
             
             detail_soup = BeautifulSoup(resp.text, 'lxml')
             
@@ -31,7 +31,6 @@ class MuranowAdapter(BaseAdapter):
             poster_url = None
             
             # Look for main image
-            # Commonly Muranów has a main image in div with class 'c-article__image' or similar
             img_node = detail_soup.find('img', class_='c-image--main')
             if not img_node:
                 img_node = detail_soup.find('div', class_='c-article__image')
@@ -73,10 +72,9 @@ class MuranowAdapter(BaseAdapter):
             print(f"Warning: Failed to fetch movie details from {movie_url}: {e}")
             return None
 
-    async def fetch_screenings(self, target_date: date) -> List[Screening]:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(self.base_url, timeout=30.0)
-            response.raise_for_status()
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
+        response = await client.get(self.base_url, timeout=30.0)
+        response.raise_for_status()
             
         soup = BeautifulSoup(response.text, 'lxml')
         screenings = []
@@ -90,7 +88,29 @@ class MuranowAdapter(BaseAdapter):
             
             movie_items = day_node.find_all('div', class_='movie-calendar-info')
             
+            # Identify movies and their links for parallel detail fetching
+            movie_detail_tasks = []
+            movie_map = [] # List of tuples (movie_item, detail_task_idx)
+            
             for m_item in movie_items:
+                movie_link_node = m_item.find('a', class_='c-button-tickets--movie-link')
+                movie_url = movie_link_node.get('href') if movie_link_node else None
+                
+                if movie_url:
+                    if not movie_url.startswith('http'):
+                        from urllib.parse import urljoin
+                        movie_url = urljoin("https://kinomuranow.pl", movie_url)
+                    
+                    task = self._fetch_movie_details(client, movie_url)
+                    movie_detail_tasks.append(task)
+                    movie_map.append((m_item, movie_url))
+                else:
+                    movie_map.append((m_item, None))
+
+            # Fetch all details in parallel
+            await asyncio.gather(*movie_detail_tasks)
+            
+            for m_item, movie_url in movie_map:
                 title_node = m_item.find('h5', class_='movie-calendar-info__title')
                 time_node = m_item.find('span', class_='movie-calendar-info__date')
                 
@@ -106,20 +126,12 @@ class MuranowAdapter(BaseAdapter):
                 except ValueError:
                     continue
                 
-                # Muranów expand link has movie description link
-                movie_link_node = m_item.find('a', class_='c-button-tickets--movie-link')
-                movie_url = movie_link_node.get('href') if movie_link_node else None
-                
                 duration_min = None
                 language, tags = extract_language_and_tags(title_raw)
                 poster_url = None
                 
                 if movie_url:
-                    if not movie_url.startswith('http'):
-                        from urllib.parse import urljoin
-                        movie_url = urljoin("https://kinomuranow.pl", movie_url)
-                    
-                    details = await self._fetch_movie_details(movie_url)
+                    details = self._movie_cache.get(movie_url)
                     if details:
                         duration_min = details['duration_min']
                         if details['language'] != "org":

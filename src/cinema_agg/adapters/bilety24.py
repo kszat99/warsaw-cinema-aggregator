@@ -9,13 +9,12 @@ from ..models import Screening
 from ..normalize import normalize_title, extract_language_and_tags
 
 class Bilety24Adapter(BaseAdapter):
-    async def fetch_screenings(self, target_date: date) -> List[Screening]:
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         # URL format: ?b24_day=YYYY-MM-DD
         url = f"{self.base_url.rstrip('/')}/?b24_day={target_date.isoformat()}"
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, follow_redirects=True, timeout=30.0)
-            response.raise_for_status()
+        response = await client.get(url, follow_redirects=True, timeout=30.0)
+        response.raise_for_status()
             
         soup = BeautifulSoup(response.text, 'lxml')
         screenings = []

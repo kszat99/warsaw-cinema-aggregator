@@ -6,7 +6,7 @@ from .base import BaseAdapter
 from ..normalize import normalize_title
 
 class CinemaCityAdapter(BaseAdapter):
-    async def fetch_screenings(self, target_date: date) -> List[Screening]:
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         # self.cinema_id is the numeric ID (e.g. 1088)
         url = f"https://www.cinema-city.pl/pl/data-api-service/v1/quickbook/10103/film-events/in-cinema/{self.cinema_id}/at-date/{target_date.isoformat()}?attr=&lang=pl_PL"
         
@@ -15,15 +15,14 @@ class CinemaCityAdapter(BaseAdapter):
             'Referer': 'https://www.cinema-city.pl/'
         }
 
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(url, headers=headers)
-                if resp.status_code == 404:
-                    return []
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception:
+        try:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
                 return []
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception:
+            return []
 
         films_data = {f['id']: f for f in data.get('body', {}).get('films', [])}
         events = data.get('body', {}).get('events', [])

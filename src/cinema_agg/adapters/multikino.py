@@ -6,11 +6,9 @@ from .base import BaseAdapter
 from ..normalize import normalize_title
 
 class MultikinoAdapter(BaseAdapter):
-    async def fetch_screenings(self, target_date: date) -> List[Screening]:
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         # self.cinema_id is the multikino ID string (e.g. "0040")
         
-        # 1. First get cookies from the main page
-        client = httpx.AsyncClient(follow_redirects=True)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "application/json"
@@ -18,9 +16,9 @@ class MultikinoAdapter(BaseAdapter):
         
         main_url = f"{self.base_url}/teraz-gramy"
         try:
+            # First get cookies from the main page if needed (shared client handles it)
             await client.get(main_url, headers=headers)
         except Exception:
-            await client.aclose()
             return []
             
         # 2. Query the showing groups API
@@ -38,13 +36,11 @@ class MultikinoAdapter(BaseAdapter):
         
         try:
             resp = await client.get(api_url, params=params, headers=headers)
-            await client.aclose()
             
             if resp.status_code != 200:
                 return []
             data = resp.json()
         except Exception:
-            await client.aclose()
             return []
             
         screenings = []

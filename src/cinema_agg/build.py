@@ -98,23 +98,24 @@ async def run_build():
     
     all_screenings: List[Screening] = []
     
-    for cinema_cfg in CINEMAS:
-        adapter_cls = ADAPTER_MAP.get(cinema_cfg.adapter)
-        if not adapter_cls:
-            print(f"Warning: No adapter found for {cinema_cfg.id} ({cinema_cfg.adapter})")
-            continue
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        for cinema_cfg in CINEMAS:
+            adapter_cls = ADAPTER_MAP.get(cinema_cfg.adapter)
+            if not adapter_cls:
+                print(f"Warning: No adapter found for {cinema_cfg.id} ({cinema_cfg.adapter})")
+                continue
+                
+            adapter = adapter_cls(cinema_cfg.id, cinema_cfg.name, cinema_cfg.url)
+            print(f"Fetching screenings for {cinema_cfg.name} (14 days)...", flush=True)
             
-        adapter = adapter_cls(cinema_cfg.id, cinema_cfg.name, cinema_cfg.url)
-        print(f"Fetching screenings for {cinema_cfg.name}...")
-        
-        for target_date in date_range:
+            tasks = [adapter.fetch_screenings(target_date, client) for target_date in date_range]
             try:
-                # print(f"    - Fetching {target_date}...", end="\r")
-                screenings = await adapter.fetch_screenings(target_date)
-                all_screenings.extend(screenings)
-                print(f"  - {target_date}: Found {len(screenings)} screenings", flush=True)
+                results = await asyncio.gather(*tasks)
+                for screenings in results:
+                    all_screenings.extend(screenings)
+                print(f"  - Completed. Total screenings: {len(all_screenings)}", flush=True)
             except Exception as e:
-                print(f"\n  - Error fetching {target_date}: {e}")
+                print(f"\n  - Error fetching {cinema_cfg.name}: {e}", flush=True)
                 
     # Deduplicate: (starts_at, title_norm, cinema_id)
     seen = set()

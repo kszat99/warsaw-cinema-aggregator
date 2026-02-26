@@ -1,3 +1,4 @@
+import httpx
 from abc import ABC, abstractmethod
 from datetime import date
 from typing import List
@@ -10,6 +11,6 @@ class BaseAdapter(ABC):
         self.base_url = base_url
 
     @abstractmethod
-    async def fetch_screenings(self, target_date: date) -> List[Screening]:
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         """Fetch and parse screenings for a specific date."""
         pass

@@ -9,13 +9,12 @@ from ..models import Screening
 from ..normalize import normalize_title, extract_language_and_tags
 
 class NovekinoAdapter(BaseAdapter):
-    async def fetch_screenings(self, target_date: date) -> List[Screening]:
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         # URL format: ?sort=Date&date=YYYY-MM-DD&datestart=0
         url = f"{self.base_url}?sort=Date&date={target_date.isoformat()}&datestart=0"
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, follow_redirects=True)
-            response.raise_for_status()
+        response = await client.get(url, follow_redirects=True)
+        response.raise_for_status()
             
         soup = BeautifulSoup(response.text, 'lxml')
         screenings = []
