@@ -46,6 +46,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist/poster_cache.json
+          git add -f dist/poster_cache.json
           git commit -m "Update poster cache [skip ci]" || echo "No changes to cache"
           git push origin main
