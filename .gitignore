@@ -1,4 +1,4 @@
-# Python
+# Python environment
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,15 +7,49 @@ env/
 venv/
 ENV/
 
-# IDEs
+# IDE settings
 .idea/
 .vscode/
 
-# Project specific
+# Build artifacts
 build_output.txt
-debug_norm.py
-read_log.py
-test_build_minimal.py
-data/*.sqlite
+build.log
 dist/showtimes.json
 dist/poster_cache.json
+
+# --- Research & Temporary Debris ---
+# Ignore all research scripts in root
+analyze_*.py
+explore_*.py
+fetch_*.py
+extract_*.py
+find_api*.py
+inspect_*.py
+debug_*.py
+read_log.py
+test_*.py
+parse_*.py
+clear_*.py
+
+# Ignore HTML/JSON/JS samples in root (Keep index, app, styles)
+*.html
+!index.html
+*.json
+*.js
+!app.js
+
+# Ignore specific local database or JSON files
+data/
+user_mickiewicz.json
+cinema_city_sample.json
+multikino_api_real.json
+multikino_live_nextdata.json
+multikino_mlociny.json
+multikino_showing_test.json
+multikino_uuid_test.json
+muranow_detail_text.txt
+
+# Exception: keep standard project files
+!README.md
+!requirements.txt
+!.gitignore
