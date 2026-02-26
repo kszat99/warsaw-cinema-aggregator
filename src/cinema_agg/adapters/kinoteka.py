@@ -12,43 +12,55 @@ class KinotekaAdapter(BaseAdapter):
     def __init__(self, cinema_id: str, cinema_name: str, base_url: str):
         super().__init__(cinema_id, cinema_name, base_url)
         self._runtime_cache = {}
+        # Limit total concurrent detail requests to 5 to avoid blocking
+        self._semaphore = asyncio.Semaphore(5)
 
     async def _fetch_details(self, client: httpx.AsyncClient, movie_url: str):
         if movie_url in self._runtime_cache:
             return self._runtime_cache[movie_url]
             
-        try:
-            movie_resp = await client.get(movie_url, follow_redirects=True, timeout=20.0)
-            if movie_resp.status_code == 200:
-                movie_soup = BeautifulSoup(movie_resp.text, "lxml")
-                
-                duration_min = None
-                dp_poster_url = None
+        async with self._semaphore:
+            # Retry logic: 3 attempts with progressive delay
+            for attempt in range(3):
+                try:
+                    movie_resp = await client.get(movie_url, follow_redirects=True, timeout=20.0)
+                    if movie_resp.status_code == 200:
+                        movie_soup = BeautifulSoup(movie_resp.text, "lxml")
+                        
+                        duration_min = None
+                        dp_poster_url = None
 
-                # 1. Search for duration
-                duration_text = movie_soup.find(string=re.compile(r"czas trwania", re.I))
-                if duration_text:
-                    look_in = duration_text.parent.get_text()
-                    duration_match = re.search(r'(\d+)\s*min', look_in)
-                    if duration_match:
-                        duration_min = int(duration_match.group(1))
-                
-                # 2. Search for poster as fallback
-                poster_node = movie_soup.select_one(".e-movie__poster img") or movie_soup.select_one(".e-single-movie__poster img") or movie_soup.select_one("article img")
-                if poster_node:
-                    dp_poster_url = poster_node.get("data-src") or poster_node.get("src")
-                    if dp_poster_url and not dp_poster_url.startswith('http'):
-                        from urllib.parse import urljoin
-                        dp_poster_url = urljoin(self.base_url, dp_poster_url)
-                
-                data = {
-                    'duration': duration_min,
-                    'poster': dp_poster_url
-                }
-                self._runtime_cache[movie_url] = data
-                return data
-        except Exception as e:
-            print(f"      - Warning: Failed to fetch data from {movie_url}: {e}")
+                        # 1. Search for duration
+                        duration_text = movie_soup.find(string=re.compile(r"czas trwania", re.I))
+                        if duration_text:
+                            look_in = duration_text.parent.get_text()
+                            duration_match = re.search(r'(\d+)\s*min', look_in)
+                            if duration_match:
+                                duration_min = int(duration_match.group(1))
+                        
+                        # 2. Search for poster as fallback
+                        poster_node = movie_soup.select_one(".e-movie__poster img") or movie_soup.select_one(".e-single-movie__poster img") or movie_soup.select_one("article img")
+                        if poster_node:
+                            dp_poster_url = poster_node.get("data-src") or poster_node.get("src")
+                            if dp_poster_url and not dp_poster_url.startswith('http'):
+                                from urllib.parse import urljoin
+                                dp_poster_url = urljoin(self.base_url, dp_poster_url)
+                        
+                        data = {
+                            'duration': duration_min,
+                            'poster': dp_poster_url
+                        }
+                        self._runtime_cache[movie_url] = data
+                        return data
+                    elif movie_resp.status_code == 429:
+                        await asyncio.sleep(2 * (attempt + 1))
+                    else:
+                        break # Other status codes, don't retry immediately
+                except Exception as e:
+                    if attempt < 2:
+                        await asyncio.sleep(1 * (attempt + 1))
+                    else:
+                        print(f"      - Warning: Failed to fetch data from {movie_url} after 3 attempts: {e}")
         return None
 
     async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
