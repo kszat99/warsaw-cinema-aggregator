@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+
+# Project specific
+build_output.txt
+debug_norm.py
+read_log.py
+test_build_minimal.py
+data/*.sqlite
+dist/showtimes.json
+dist/poster_cache.json

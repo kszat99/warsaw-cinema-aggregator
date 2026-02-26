@@ -1,0 +1,128 @@
+﻿<!DOCTYPE html><html lang="pl-PL"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width"/><link rel="apple-touch-icon-precomposed" sizes="57x57" href="/favicons/pl/apple-touch-icon-57x57.png"/><link rel="apple-touch-icon-precomposed" sizes="60x60" href="/favicons/pl/apple-touch-icon-60x60.png"/><link rel="apple-touch-icon-precomposed" sizes="72x72" href="/favicons/pl/apple-touch-icon-72x72.png"/><link rel="apple-touch-icon-precomposed" sizes="76x76" href="/favicons/pl/apple-touch-icon-76x76.png"/><link rel="apple-touch-icon-precomposed" sizes="114x114" href="/favicons/pl/apple-touch-icon-114x114.png"/><link rel="apple-touch-icon-precomposed" sizes="120x120" href="/favicons/pl/apple-touch-icon-120x120.png"/><link rel="apple-touch-icon-precomposed" sizes="144x144" href="/favicons/pl/apple-touch-icon-144x144.png"/><link rel="apple-touch-icon-precomposed" sizes="152x152" href="/favicons/pl/apple-touch-icon-152x152.png"/><link rel="icon" sizes="16x16" type="image/png" href="/favicons/pl/favicon-16x16.png"/><link rel="icon" sizes="32x32" type="image/png" href="/favicons/pl/favicon-32x32.png"/><link rel="icon" sizes="96x96" type="image/png" href="/favicons/pl/favicon-96x96.png"/><link rel="icon" sizes="128x128" type="image/png" href="/favicons/pl/favicon-128x128.png"/><link rel="icon" sizes="196x196" type="image/png" href="/favicons/pl/favicon-196x196.png"/><script defer="" id="adobe-analytics-antiflicker" type="text/javascript">
+                  (function (_win, doc, style, timeout) {
+                    if(isAdobeScriptLoaded) {
+                      return;
+                    }
+
+                    var _debug_variable_1;
+                    var _debug_variable_2;
+                    var isAdobeScriptLoaded = false;
+                    var STYLE_ID = "at-body-style";
+
+                    function getParent() {
+                      return doc.getElementsByTagName("head")[0];
+                    }
+
+                    function addStyle(parent, id, def) {
+                      if (!parent) {
+                        return;
+                      }
+                      var style = doc.createElement("style");
+                      style.id = id;
+                      style.innerHTML = def;
+                      parent.appendChild(style);
+                    }
+
+                    function getCookie(name) {
+                      var nameEQ = name + "=";
+                      var ca = document.cookie.split(";");
+
+                      for (var i = 0; i < ca.length; i++) {
+                        var c = ca[i];
+
+                        while (c.charAt(0) == " ") c = c.substring(1, c.length);
+
+                        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+                      }
+
+                      return null;
+                    }
+
+                    function removeStyle() {
+                      const el = document.getElementById(STYLE_ID);
+                      if (el) {
+                        el.remove();
+                      } else {
+                      }
+                    }
+
+                    function createStyle() {
+                      let el = document.getElementById(STYLE_ID);
+                      if (el) return el;
+
+                      el = document.createElement("style");
+                      el.id = STYLE_ID;
+                      el.textContent = style;
+                      document.head.appendChild(el);
+                      return el;
+                    }
+
+                    var cookieCheck = getCookie("OptanonConsent");
+
+                    if (cookieCheck?.indexOf("C0002%3A1") > 0) {
+                      setTimeout(() => addStyle(getParent(), STYLE_ID, style), 0);
+                    } else {
+                      removeStyle(getParent(), STYLE_ID);
+                    }
+
+                    const observer = new MutationObserver(mutations => {
+                      for (const m of mutations) {
+                        for (const node of m.addedNodes) {
+                          if (node.nodeType === 1 && node.id === STYLE_ID) {
+                            if (!_debug_variable_2) {
+                              removeStyle();
+                              createStyle();
+                              _debug_variable_2 = true;
+                            }
+                          }
+                        }
+
+                        for (const node of m.removedNodes) {
+                          if (node.nodeType === 1 && node.id === STYLE_ID) {
+                            if (!_debug_variable_1) createStyle();
+                          }
+                        }
+                      }
+                    });
+
+                    observer.observe(document.documentElement, {
+                      childList: true,
+                      subtree: false
+                    });
+      
+                    [
+                      { id: "REQUEST_FAILED", value: "at-request-failed" },
+                      { id: "CONTENT_RENDERING_FAILED", value: "at-content-rendering-failed" },
+                      { id: "CONTENT_RENDERING_SUCCEEDED", value: "at-content-rendering-succeeded" },
+                      { id: "CONTENT_RENDERING_NO_OFFERS", value: "at-content-rendering-no-offers" },
+                    ].forEach(function(item) {
+                      document.addEventListener(item.value, function(e) {
+                        removeStyle(getParent(), STYLE_ID);
+                      });
+                    });
+
+                    // set event for testing
+                    document.addEventListener("at-request-succeeded", function(e) {
+                    });
+
+                    console.time('antiflicker');
+                    setTimeout((e) => {
+                      console.timeEnd('antiflicker');
+                      removeStyle(getParent(), STYLE_ID);
+                    }, timeout);
+                  })(
+                    window,
+                    document,
+                    "body {opacity: 0 !important}",
+                    Number(3) * 1000 );
+                  </script><script async="" type="text/javascript" src="https://cdn.cookielaw.org/scripttemplates/otSDKStub.js" data-domain-script="f70ef685-cc7d-472d-946f-4be191f04092" data-language="pl"></script><script type="text/javascript">function OptanonWrapper() {
+                window.appEventData = window.appEventData || [];
+                window.appEventData.push({
+                    "event": "OneTrustGroupsUpdated",
+                });}</script><script async="" src="https://assets.adobedtm.com/b6542db7f1a1/c2de8b0d2e4f/launch-e20ba9589b89.min.js" type="text/javascript" data-ut-id="adobe-analytics-script"></script><meta name="next-head-count" content="7"/><link data-next-font="" rel="preconnect" href="/" crossorigin="anonymous"/><link rel="preload" href="https://www.multikino.pl/_next/static/css/85a66a223d37be65.css" as="style"/><link rel="stylesheet" href="https://www.multikino.pl/_next/static/css/85a66a223d37be65.css" data-n-g=""/><noscript data-n-css=""></noscript><script defer="" nomodule="" src="https://www.multikino.pl/_next/static/chunks/polyfills-c67a75d1b6f99dc8.js"></script><script src="https://www.multikino.pl/_next/static/chunks/webpack-24168131b010643e.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/framework-fee8a7e75612eda8.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/main-d8a70424d32dec46.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/pages/_app-4fbd60de4232ffc0.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/a447bf24-c3323911474d9ca7.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/4469-695750e731239c29.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/7953-4f22699ef94ba7c0.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/4687-076cb0fc48792acc.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/5758-93c2f5f13d6d9456.js" defer=""></script><script src="https://www.multikino.pl/_next/static/chunks/pages/%5B%5B...path%5D%5D-e7a791e6653d21a5.js" defer=""></script><script src="https://www.multikino.pl/_next/static/kbqpkmis4pj/_buildManifest.js" defer=""></script><script src="https://www.multikino.pl/_next/static/kbqpkmis4pj/_ssgManifest.js" defer=""></script></head><body><div id="__next"><script async="" src="https://securepubads.g.doubleclick.net/tag/js/gpt.js" crossorigin="anonymous"></script><script>window.googletag = window.googletag || {cmd: []};
+        window.googletag.cmd.push(function() {
+        window.googletag.pubads().setRequestNonPersonalizedAds(1);
+        window.googletag.pubads().enableSingleRequest();
+        window.googletag.enableServices();
+        });
+        </script></div><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"locale":"pl-PL","layoutData":{"sitecore":{"context":{"pageEditing":false,"site":{"name":"vuecinemas-pl"},"pageState":"normal","language":"pl-PL","itemPath":"/repertuar/,-w-,/teraz-gramy","attributeSettings":{"defaultLanguageAttribute":"0e2e76f6-99cb-49ff-9874-a0a9198b6c86","embargoSessionAttribute":"0704fe90-a832-42e4-8785-8186f71c045f","singleSeatAttribute":"b3e8a3ee-ca0c-46e5-9592-c105ee60c25d","wheelChairAccessibilityEnabled":true},"urlSettings":[{"name":"guest-refund-successful-url","url":"/zwrot/uzasadnienie"},{"name":"trailers-trending-now","url":"/zwiastuny/trending-now"},{"name":"coming-soon-mobile-url","url":"/wkrotce"},{"name":"trailers","url":"/zwiastuny"},{"name":"explore-tabs-page","url":"/explore-tabs-page"},{"name":"product-processing-url","url":"/produkt/zamowienie/{cinemaId}/{orderId}"},{"name":"not-found","url":"/404"},{"name":"about-vue","url":"/o-nas/o-nas"},{"name":"trailers-coming-soon","url":"/zwiastuny/coming-soon"},{"name":"processing-url","url":"/zamowienie/{cinemaId}/{filmId}/{sessionId}/{orderId}"},{"name":"reset-passwo

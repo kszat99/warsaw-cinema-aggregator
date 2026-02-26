@@ -1,0 +1,48 @@
+name: Refresh Cinema Data
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Every day at 4:00 AM UTC
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run aggregator build
+        run: |
+          python -m src.cinema_agg.build
+
+      - name: Build site (dist)
+        run: |
+          mkdir -p site
+          cp index.html styles.css app.js site/
+          mkdir -p site/dist
+          cp dist/showtimes.json site/dist/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+
+      - name: Commit poster cache
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/poster_cache.json
+          git commit -m "Update poster cache [skip ci]" || echo "No changes to cache"
+          git push origin main
