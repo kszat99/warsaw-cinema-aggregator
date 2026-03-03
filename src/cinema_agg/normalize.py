@@ -40,7 +40,8 @@ def clean_title_for_search(title: str) -> str:
     # Handles: „Bez wyjścia" pokaz przedpremierowy w ramach cyklu Spotkania Filozoficzne
     # U+201E „  U+201C "  U+00AB «  (opening)
     # U+201D "  U+201F ‟  U+00BB »  (closing)
-    quoted_match = re.match(r'[\u201e\u201c\u00ab](.+?)[\u201d\u201f\u00bb]\s+.+', title)
+    # NOTE: non-raw string so \u escapes are interpreted as Unicode characters
+    quoted_match = re.match('[\u201e\u201c\u00ab](.+?)[\u201d\u201f\u00bb]\\s+.+', title)
     if quoted_match:
         title = quoted_match.group(1)
 

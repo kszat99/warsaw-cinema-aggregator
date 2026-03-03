@@ -291,6 +291,7 @@ main {
 .cinema-filter {
     margin-top: 1.5rem;
     position: relative;
+    z-index: 50;
 }
 
 .cinema-dropdown-toggle {
