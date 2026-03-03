@@ -86,7 +86,8 @@ class PosterService:
         except Exception as e:
             print(f"Error fetching poster for {search_title}: {e}")
         
-        self.cache[title_norm] = None # Don't retry failed looks
+        # NOTE: We do NOT save 'None' to self.cache permanently anymore.
+        # This ensures we retry missing posters on every build.
         return None
 
 async def run_build():

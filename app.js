@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dateSelector = document.getElementById('date-selector');
     const searchInput = document.getElementById('movie-search');
     const lastUpdateSpan = document.getElementById('last-update');
-    const syncButton = document.getElementById('sync-button');
     const cinemaListUl = document.getElementById('cinema-list');
     const searchAllDates = document.getElementById('search-all-dates');
     const dateScrollLeft = document.getElementById('date-scroll-left');
@@ -41,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         allScreenings = data.screenings;
         state.lastGenerated = new Date(data.generated_at);
 
-        updateSyncUI();
+        updateLastUpdateUI();
         initApp();
     } catch (err) {
         console.error(err);
@@ -78,47 +77,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             applyFilters();
         });
 
-        syncButton.addEventListener('click', handleSync);
-
         // Initial Render
         applyFilters();
     }
 
-    // ──────────── Sync ────────────
+    // ──────────── Last Update UI ────────────
 
-    function updateSyncUI() {
+    function updateLastUpdateUI() {
         if (!state.lastGenerated) return;
-
-        const now = new Date();
-        const diffMs = now - state.lastGenerated;
-        const diffHours = diffMs / (1000 * 60 * 60);
-
         lastUpdateSpan.textContent = `Sync: ${state.lastGenerated.toLocaleDateString()} ${state.lastGenerated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-        if (diffHours < 1) {
-            const remainingMins = Math.ceil(60 - (diffMs / 60000));
-            syncButton.disabled = true;
-            syncButton.title = `Sync dostępny za ${remainingMins} min`;
-        } else {
-            syncButton.disabled = false;
-            syncButton.title = "Uruchom ponowne skanowanie kin (GitHub Actions)";
-        }
-    }
-
-    async function handleSync() {
-        const now = new Date();
-        if (now - state.lastGenerated < 3600000) return;
-
-        syncButton.classList.add('syncing');
-        syncButton.disabled = true;
-
-        alert("Otwieram stronę GitHub Actions. Kliknij 'Run workflow' w workflow 'Daily Data Refresh', aby odświeżyć dane manualnie.");
-        window.open('https://github.com/vaxit/warsaw-cinema-aggregator/actions/workflows/refresh_data.yml', '_blank');
-
-        setTimeout(() => {
-            syncButton.classList.remove('syncing');
-            updateSyncUI();
-        }, 2000);
     }
 
     // ──────────── Date Selector ────────────

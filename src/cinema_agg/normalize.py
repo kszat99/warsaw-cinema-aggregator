@@ -41,7 +41,8 @@ def clean_title_for_search(title: str) -> str:
     # U+201E „  U+201C "  U+00AB «  (opening)
     # U+201D "  U+201F ‟  U+00BB »  (closing)
     # NOTE: non-raw string so \u escapes are interpreted as Unicode characters
-    quoted_match = re.match('[\u201e\u201c\u00ab](.+?)[\u201d\u201f\u00bb]\\s+.+', title)
+    # More flexible regex: match quoted part, then optionally anything else
+    quoted_match = re.match('[\u201e\u201c\u00ab](.+?)[\u201d\u201f\u00bb](.*)', title)
     if quoted_match:
         title = quoted_match.group(1)
 
