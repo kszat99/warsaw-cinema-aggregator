@@ -14,6 +14,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dateScrollLeft = document.getElementById('date-scroll-left');
     const dateScrollRight = document.getElementById('date-scroll-right');
 
+    const DAY_NAMES = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+    const LANG_LABELS = {
+        'nap': 'Napisy',
+        'dub': 'Dubbing',
+        'voiceover': 'Lektor',
+        'org': 'Oryginał',
+        'ua': 'UA 🇺🇦'
+    };
+
     let allScreenings = [];
     let cinemasMap = new Map();
     let state = {
@@ -55,10 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderCinemaDropdown(cinemasMap);
         renderCinemasList(cinemasMap);
 
-        // Initial Render
-        applyFilters();
-
-        // Event Listeners
+        // Event Listeners (attached BEFORE initial render so they work even if render hits an issue)
         searchInput.addEventListener('input', (e) => {
             state.searchQuery = e.target.value.toLowerCase();
             applyFilters();
@@ -73,6 +79,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         syncButton.addEventListener('click', handleSync);
+
+        // Initial Render
+        applyFilters();
     }
 
     // ──────────── Sync ────────────
@@ -294,15 +303,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ──────────── Render: Single Day (horizontal strip) ────────────
-
-    const DAY_NAMES = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
-    const LANG_LABELS = {
-        'nap': 'Napisy',
-        'dub': 'Dubbing',
-        'voiceover': 'Lektor',
-        'org': 'Oryginał',
-        'ua': 'UA 🇺🇦'
-    };
 
     function renderMovies(movies) {
         if (movies.length === 0) {
