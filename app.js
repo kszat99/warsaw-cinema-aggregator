@@ -282,22 +282,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         movies.forEach((movie, index) => {
             const card = createMovieCard(movie, index);
+            const contentCol = card.querySelector('.content-column');
 
             // Horizontal screening strip
             const sortedScreenings = [...movie.screenings].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
             const scrollerWrapper = document.createElement('div');
             scrollerWrapper.className = 'screenings-scroller-wrapper';
 
-            const screeningsList = document.createElement('div');
-            screeningsList.className = 'screenings-list';
+            scrollerWrapper.innerHTML = `
+                <button class="screenings-nav-btn nav-left" aria-label="Przewiń seanse w lewo">◀</button>
+                <div class="screenings-list"></div>
+                <button class="screenings-nav-btn nav-right" aria-label="Przewiń seanse w prawo">▶</button>
+            `;
 
+            const screeningsList = scrollerWrapper.querySelector('.screenings-list');
             sortedScreenings.forEach(s => {
                 screeningsList.appendChild(createScreeningChip(s, false));
             });
 
-            scrollerWrapper.appendChild(screeningsList);
-            card.querySelector('.content-column').appendChild(scrollerWrapper);
+            contentCol.appendChild(scrollerWrapper);
             moviesGrid.appendChild(card);
+            setupScroller(scrollerWrapper);
         });
     }
 
@@ -343,20 +348,55 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const scrollerWrapper = document.createElement('div');
                 scrollerWrapper.className = 'screenings-scroller-wrapper';
 
-                const screeningsList = document.createElement('div');
-                screeningsList.className = 'screenings-list';
+                scrollerWrapper.innerHTML = `
+                    <button class="screenings-nav-btn nav-left" aria-label="Przewiń seanse w lewo">◀</button>
+                    <div class="screenings-list"></div>
+                    <button class="screenings-nav-btn nav-right" aria-label="Przewiń seanse w prawo">▶</button>
+                `;
 
+                const screeningsList = scrollerWrapper.querySelector('.screenings-list');
                 dayScreenings.forEach(s => {
                     screeningsList.appendChild(createScreeningChip(s, false));
                 });
 
-                scrollerWrapper.appendChild(screeningsList);
                 dayGroup.appendChild(scrollerWrapper);
                 contentCol.appendChild(dayGroup);
+                setupScroller(scrollerWrapper);
             });
 
             moviesGrid.appendChild(card);
         });
+    }
+
+    function setupScroller(wrapper) {
+        const list = wrapper.querySelector('.screenings-list');
+        const lBtn = wrapper.querySelector('.nav-left');
+        const rBtn = wrapper.querySelector('.nav-right');
+
+        function updateArrows() {
+            const isOverflowing = list.scrollWidth > list.clientWidth + 5;
+            if (!isOverflowing) {
+                lBtn.style.display = 'none';
+                rBtn.style.display = 'none';
+                return;
+            }
+
+            lBtn.style.display = 'flex';
+            rBtn.style.display = 'flex';
+
+            lBtn.disabled = list.scrollLeft <= 5;
+            rBtn.disabled = list.scrollLeft >= list.scrollWidth - list.clientWidth - 5;
+        }
+
+        lBtn.addEventListener('click', () => list.scrollBy({ left: -300, behavior: 'smooth' }));
+        rBtn.addEventListener('click', () => list.scrollBy({ left: 300, behavior: 'smooth' }));
+
+        list.addEventListener('scroll', updateArrows);
+        // Observe resize to update arrows if window changes
+        if (window.ResizeObserver) {
+            new ResizeObserver(updateArrows).observe(list);
+        }
+        setTimeout(updateArrows, 100);
     }
 
     // ──────────── Shared Builders ────────────

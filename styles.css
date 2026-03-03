@@ -462,29 +462,82 @@ main {
     position: absolute;
     top: 0;
     right: 0;
-    width: 40px;
-    height: 100%;
-    background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.9));
+    width: 60px;
+    height: calc(100% - 10px);
+    background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.7));
     pointer-events: none;
     z-index: 2;
+}
+
+.screenings-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    background: var(--bg-accent);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    border-radius: 50%;
+    display: none;
+    /* Hidden by default, shown via JS if overflow */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s;
+    font-size: 0.7rem;
+}
+
+.screenings-nav-btn:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.screenings-nav-btn.nav-left {
+    left: -10px;
+}
+
+.screenings-nav-btn.nav-right {
+    right: -10px;
+}
+
+.screenings-nav-btn:disabled {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .screenings-list {
     display: flex;
     gap: 0.6rem;
     overflow-x: auto;
-    padding-bottom: 0.5rem;
+    padding-bottom: 0.8rem;
+    /* Space for scrollbar */
     scrollbar-width: thin;
-    scrollbar-color: var(--glass-border) transparent;
+    scrollbar-color: var(--accent-secondary) rgba(255, 255, 255, 0.05);
+    scroll-behavior: smooth;
 }
 
+/* Modern Styled Scrollbar for Webkit */
 .screenings-list::-webkit-scrollbar {
-    height: 4px;
+    height: 6px;
+}
+
+.screenings-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--radius-full);
 }
 
 .screenings-list::-webkit-scrollbar-thumb {
-    background: var(--glass-border);
+    background: var(--accent-secondary);
     border-radius: var(--radius-full);
+    opacity: 0.8;
+}
+
+.screenings-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
 }
 
 .screening-item {
