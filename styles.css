@@ -195,13 +195,48 @@ main {
     cursor: pointer;
 }
 
-/* Date Selector */
+/* Date Selector with Scroll Arrows */
+.date-selector-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0;
+}
+
+.date-scroll-btn {
+    flex: 0 0 36px;
+    height: 36px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-smooth);
+}
+
+.date-scroll-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.date-scroll-btn:disabled {
+    opacity: 0.2;
+    cursor: default;
+}
+
 .date-selector {
     display: flex;
     gap: 0.8rem;
     overflow-x: auto;
     padding-bottom: 0.5rem;
     scrollbar-width: none;
+    flex: 1;
+    scroll-behavior: smooth;
 }
 
 .date-selector::-webkit-scrollbar {
@@ -313,7 +348,7 @@ main {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
     padding: 0.5rem;
-    max-height: 240px;
+    max-height: 280px;
     overflow-y: auto;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
     display: none;
@@ -387,23 +422,21 @@ main {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-xl);
     overflow: hidden;
-    display: grid;
-    grid-template-columns: 180px 1fr;
+    display: flex;
+    flex-direction: row;
     transition: var(--transition-smooth);
     width: 100%;
 }
 
 .movie-card:hover {
-    transform: translateY(-8px) scale(1.005);
     border-color: rgba(255, 255, 255, 0.2);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
 .poster-column {
     position: relative;
-    height: 100%;
-    min-height: 270px;
-    max-height: 400px;
+    flex: 0 0 160px;
+    height: 240px;
     background: #0f172a;
     overflow: hidden;
 }
@@ -417,24 +450,27 @@ main {
 }
 
 .movie-card:hover .poster-column img {
-    transform: scale(1.08);
+    transform: scale(1.05);
 }
 
 .content-column {
-    padding: 1.75rem;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .movie-header-info {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .movie-title {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.01em;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     color: var(--text-primary);
 }
 
@@ -453,21 +489,52 @@ main {
     font-weight: 600;
 }
 
-/* Screenings List */
+/* Horizontal Screenings Strip */
+.screenings-scroller-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
+.screenings-scroller-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(15, 23, 42, 0.9));
+    pointer-events: none;
+    z-index: 2;
+}
+
 .screenings-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 0.8rem;
+    display: flex;
+    gap: 0.6rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--glass-border) transparent;
+}
+
+.screenings-list::-webkit-scrollbar {
+    height: 4px;
+}
+
+.screenings-list::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: var(--radius-full);
 }
 
 .screening-item {
+    flex: 0 0 auto;
+    min-width: 130px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
     text-decoration: none;
     color: inherit;
-    transition: var(--transition-smooth);
+    transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
 }
@@ -494,17 +561,17 @@ main {
 
 .screening-time {
     display: block;
-    font-size: 1.4rem;
+    font-size: 1.3rem;
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 0.1rem;
 }
 
 .screening-cinema {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--accent-secondary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
     display: block;
     white-space: nowrap;
     overflow: hidden;
@@ -512,20 +579,44 @@ main {
 }
 
 .screening-info {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
     display: flex;
-    gap: 0.4rem;
+    gap: 0.3rem;
     align-items: center;
     flex-wrap: wrap;
 }
 
 .screening-date {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 1px 4px;
+    background: rgba(139, 92, 246, 0.2);
+    padding: 1px 5px;
     border-radius: 4px;
     font-weight: 700;
-    color: var(--text-secondary);
+    color: var(--accent-primary);
+    font-size: 0.7rem;
+}
+
+/* Day-grouped screening rows (all-days mode) */
+.day-group {
+    margin-bottom: 0.75rem;
+}
+
+.day-group:last-child {
+    margin-bottom: 0;
+}
+
+.day-group-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.5rem;
+    padding-left: 0.25rem;
+}
+
+.day-group .screenings-scroller-wrapper {
+    margin-bottom: 0;
 }
 
 /* Footer Section */
@@ -585,7 +676,6 @@ footer {
     animation: fadeInUp 0.5s ease-out backwards;
 }
 
-/* Staggered load effect (applied via JS or nth-child) */
 .movie-card:nth-child(1) {
     animation-delay: 0.1s;
 }
@@ -609,26 +699,29 @@ footer {
     }
 
     .movie-card {
-        grid-template-columns: 140px 1fr;
+        flex-direction: column;
+    }
+
+    .poster-column {
+        flex: none;
+        width: 100%;
+        height: 200px;
     }
 
     .movie-title {
-        font-size: 1.4rem;
+        font-size: 1.3rem;
     }
 
-    .screenings-list {
-        grid-template-columns: 1fr;
+    .date-scroll-btn {
+        flex: 0 0 28px;
+        height: 28px;
+        font-size: 0.65rem;
     }
 }
 
 @media (max-width: 480px) {
-    .movie-card {
-        grid-template-columns: 1fr;
-    }
-
     .poster-column {
-        height: 240px;
-        min-height: auto;
+        height: 180px;
     }
 }
 
