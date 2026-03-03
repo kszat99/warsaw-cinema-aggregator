@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const moviesGrid = document.getElementById('movies-grid');
     const dateSelector = document.getElementById('date-selector');
     const searchInput = document.getElementById('movie-search');
-    const cinemaSelect = document.getElementById('cinema-select');
     const lastUpdateSpan = document.getElementById('last-update');
     const syncButton = document.getElementById('sync-button');
     const cinemaListUl = document.getElementById('cinema-list');
@@ -17,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let state = {
         selectedDate: null, // YYYY-MM-DD
         searchQuery: '',
-        selectedCinema: 'all',
+        selectedCinemas: [], // Array of cinema_ids
         searchAll: false
     };
 
@@ -52,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Generate UI components
         renderDateSelector(uniqueDates);
-        renderCinemaOptions(cinemasSet);
+        renderCinemaCheckboxes(cinemasSet);
         renderCinemasList(cinemasSet);
 
         // Initial Render
@@ -69,11 +68,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             dateSelector.style.opacity = state.searchAll ? '0.2' : '1';
             dateSelector.style.filter = state.searchAll ? 'grayscale(1)' : 'none';
             dateSelector.style.pointerEvents = state.searchAll ? 'none' : 'auto';
-            applyFilters();
-        });
-
-        cinemaSelect.addEventListener('change', (e) => {
-            state.selectedCinema = e.target.value;
             applyFilters();
         });
 
@@ -143,18 +137,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function renderCinemaOptions(cinemasMap) {
-        // Clear existing except 'all'
-        while (cinemaSelect.options.length > 1) {
-            cinemaSelect.remove(1);
-        }
+    function renderCinemaCheckboxes(cinemasMap) {
+        const container = document.getElementById('cinema-checkboxes');
+        container.innerHTML = '';
 
         const sorted = [...cinemasMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+
         sorted.forEach(([id, name]) => {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = name;
-            cinemaSelect.appendChild(opt);
+            const label = document.createElement('label');
+            label.className = 'cinema-item';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = id;
+            checkbox.checked = state.selectedCinemas.includes(id);
+
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    state.selectedCinemas.push(id);
+                    label.classList.add('selected');
+                } else {
+                    state.selectedCinemas = state.selectedCinemas.filter(cid => cid !== id);
+                    label.classList.remove('selected');
+                }
+                applyFilters();
+            });
+
+            if (checkbox.checked) label.classList.add('selected');
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(name));
+            container.appendChild(label);
         });
     }
 
@@ -173,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filtered = allScreenings.filter(s => {
             const dayMatch = state.searchAll || s.starts_at.startsWith(state.selectedDate);
             const queryMatch = s.title_norm.includes(state.searchQuery) || s.title_raw.toLowerCase().includes(state.searchQuery);
-            const cinemaMatch = state.selectedCinema === 'all' || s.cinema_id === state.selectedCinema;
+            const cinemaMatch = state.selectedCinemas.length === 0 || state.selectedCinemas.includes(s.cinema_id);
             return dayMatch && queryMatch && cinemaMatch;
         });
 
@@ -217,6 +230,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Sort movies alphabetically
         movies.sort((a, b) => a.title.localeCompare(b.title));
 
+        const dayNames = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+
         movies.forEach((movie, index) => {
             const card = document.createElement('div');
             card.className = 'movie-card';
@@ -249,7 +264,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="screenings-list">
                         ${sortedScreenings.map(s => {
                         const time = s.starts_at.split('T')[1].substring(0, 5);
-                        const date = s.starts_at.split('T')[0].split('-')[2]; // Extract DD
+                        const dateObj = new Date(s.starts_at);
+                        const dayName = dayNames[dateObj.getDay()];
+                        const dateStr = `${dayName} ${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`;
+
                         const langLabel = langLabels[s.language] || s.language;
                         const tags = s.tags.length > 0 ? s.tags.join(', ') : '';
 
@@ -260,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     <div class="screening-info">
                                         <span class="lang-tag">${langLabel}</span>
                                         ${tags ? `<span class="other-tags">• ${tags}</span>` : ''}
-                                        ${state.searchAll ? `<span class="screening-date">${date}</span>` : ''}
+                                        ${state.searchAll ? `<span class="screening-date">${dateStr}</span>` : ''}
                                     </div>
                                 </a>
                             `;
