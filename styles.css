@@ -80,61 +80,15 @@ header {
     transform: scale(1.02);
 }
 
-.sync-container {
+.header-meta {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1.5rem;
 }
 
 .last-update {
     font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    background: rgba(255, 255, 255, 0.05);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-full);
-}
-
-.sync-button {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-    padding: 0.5rem 1rem;
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 0.85rem;
-    font-weight: 600;
-    transition: var(--transition-smooth);
-}
-
-.sync-button:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
-}
-
-.sync-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    filter: grayscale(1);
-}
-
-.sync-button.syncing svg {
-    animation: rotate 1s linear infinite;
-}
-
-@keyframes rotate {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
+    color: var(--text-muted);
 }
 
 /* Main Area */
@@ -153,6 +107,9 @@ main {
     padding: 2rem;
     margin-bottom: 3rem;
     box-shadow: var(--shadow-soft);
+    position: relative;
+    z-index: 100;
+    /* High z-index to avoid overlap by movie cards */
 }
 
 .search-bar {
@@ -344,7 +301,8 @@ main {
     top: calc(100% + 6px);
     left: 0;
     right: 0;
-    z-index: 100;
+    z-index: 200;
+    /* Higher than toggle */
     background: var(--bg-accent);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
@@ -416,6 +374,9 @@ main {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    position: relative;
+    z-index: 10;
+    /* Lower than filters-container */
 }
 
 .movie-card {
