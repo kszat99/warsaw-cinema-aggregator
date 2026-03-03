@@ -36,15 +36,18 @@ def clean_title_for_search(title: str) -> str:
     for p in prefixes:
         title = re.sub(f'^{p}\\s*:\\s*', '', title, flags=re.IGNORECASE)
 
-    # 2b. Extract quoted title if present (Polish „..." or "..." quotation marks)
-    # Handles: „Bez wyjścia" pokaz przedpremierowy w ramach cyklu Spotkania Filozoficzne
-    # U+201E „  U+201C "  U+00AB «  (opening)
-    # U+201D "  U+201F ‟  U+00BB »  (closing)
-    # NOTE: non-raw string so \u escapes are interpreted as Unicode characters
-    # More flexible regex: match quoted part, then optionally anything else
-    quoted_match = re.match('[\u201e\u201c\u00ab](.+?)[\u201d\u201f\u00bb](.*)', title)
-    if quoted_match:
-        title = quoted_match.group(1)
+    # 2b. Extract quoted title if present
+    # Polish: opening „ (201E), closing ” (201D)
+    # Standard: " (0022)
+    # Others: « (00AB), » (00BB), “ (201C), ‟ (201F)
+    # We use re.search to find the quoted part anywhere in the title
+    quotes_open = '\u201e\u201c\u00ab\u0022'
+    quotes_close = '\u201d\u201f\u00bb\u0022'
+    
+    # Try to find a quoted block: [open quote][content][close quote]
+    quoted_search = re.search(f'[{quotes_open}]([^{quotes_close}]+)[{quotes_close}]', title)
+    if quoted_search:
+        title = quoted_search.group(1)
 
     # 3. Strip promotional suffixes after separators
     # We only strip if it's ONE of these: |, –, or a dash surrounded by spaces
