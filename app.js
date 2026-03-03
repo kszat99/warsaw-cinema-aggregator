@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dateSelector = document.getElementById('date-selector');
     const searchInput = document.getElementById('movie-search');
     const lastUpdateSpan = document.getElementById('last-update');
-    const cinemaListUl = document.getElementById('cinema-list');
     const searchAllDates = document.getElementById('search-all-dates');
     const dateScrollLeft = document.getElementById('date-scroll-left');
     const dateScrollRight = document.getElementById('date-scroll-right');
@@ -61,7 +60,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderDateSelector(uniqueDates);
         setupDateScrollButtons();
         renderCinemaDropdown(cinemasMap);
-        renderCinemasList(cinemasMap);
 
         // Event Listeners (attached BEFORE initial render so they work even if render hits an issue)
         searchInput.addEventListener('input', (e) => {
@@ -85,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function updateLastUpdateUI() {
         if (!state.lastGenerated) return;
-        lastUpdateSpan.textContent = `Sync: ${state.lastGenerated.toLocaleDateString()} ${state.lastGenerated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        lastUpdateSpan.textContent = `Last Sync: ${state.lastGenerated.toLocaleDateString()} ${state.lastGenerated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }
 
     // ──────────── Date Selector ────────────
@@ -152,35 +150,29 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         panel.innerHTML = '';
 
-        const sorted = [...cMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        // Add "Select/Deselect All" Toggle
+        const allToggle = document.createElement('div');
+        allToggle.className = 'cinema-item all-toggle';
+        allToggle.innerHTML = `<span>Wszystkie / Żadne</span>`;
+        allToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const allIds = [...cMap.keys()];
+            const areAllSelected = state.selectedCinemas.length === allIds.length;
 
-        sorted.forEach(([id, name]) => {
-            const label = document.createElement('label');
-            label.className = 'cinema-item';
+            if (areAllSelected) {
+                state.selectedCinemas = [];
+            } else {
+                state.selectedCinemas = allIds;
+            }
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = id;
-            checkbox.checked = state.selectedCinemas.includes(id);
-
-            checkbox.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    state.selectedCinemas.push(id);
-                    label.classList.add('selected');
-                } else {
-                    state.selectedCinemas = state.selectedCinemas.filter(cid => cid !== id);
-                    label.classList.remove('selected');
-                }
-                updateToggleText();
-                applyFilters();
-            });
-
-            if (checkbox.checked) label.classList.add('selected');
-
-            label.appendChild(checkbox);
-            label.appendChild(document.createTextNode(name));
-            panel.appendChild(label);
+            // Re-render the panel to reflect check states
+            renderCinemaDropdownPanel(cMap, panel);
+            updateToggleText();
+            applyFilters();
         });
+        panel.appendChild(allToggle);
+
+        renderCinemaDropdownPanel(cMap, panel);
 
         // Toggle dropdown open/close
         toggle.addEventListener('click', () => {
@@ -199,6 +191,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateToggleText();
     }
 
+    function renderCinemaDropdownPanel(cMap, panel) {
+        // Clear children except the toggle (first child)
+        while (panel.children.length > 1) {
+            panel.removeChild(panel.lastChild);
+        }
+
+        const sorted = [...cMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+
+        sorted.forEach(([id, name]) => {
+            const label = document.createElement('label');
+            label.className = 'cinema-item';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = id;
+            checkbox.checked = state.selectedCinemas.includes(id);
+
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    if (!state.selectedCinemas.includes(id)) state.selectedCinemas.push(id);
+                    label.classList.add('selected');
+                } else {
+                    state.selectedCinemas = state.selectedCinemas.filter(cid => cid !== id);
+                    label.classList.remove('selected');
+                }
+                updateToggleText();
+                applyFilters();
+            });
+
+            if (checkbox.checked) label.classList.add('selected');
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(name));
+            panel.appendChild(label);
+        });
+    }
+
     function updateToggleText() {
         const toggle = document.getElementById('cinema-dropdown-toggle');
         if (!toggle) return;
@@ -212,19 +241,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .filter(Boolean);
             textSpan.textContent = names.join(', ');
         }
-    }
-
-    // ──────────── Cinema Footer List ────────────
-
-    function renderCinemasList(cMap) {
-        if (!cinemaListUl) return;
-        cinemaListUl.innerHTML = '';
-        const sorted = [...cMap.values()].sort();
-        sorted.forEach((name) => {
-            const li = document.createElement('li');
-            li.textContent = name;
-            cinemaListUl.appendChild(li);
-        });
     }
 
     // ──────────── Filtering ────────────
