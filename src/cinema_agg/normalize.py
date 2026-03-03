@@ -36,6 +36,12 @@ def clean_title_for_search(title: str) -> str:
     for p in prefixes:
         title = re.sub(f'^{p}\\s*:\\s*', '', title, flags=re.IGNORECASE)
 
+    # 2b. Extract quoted title if present (Polish „..." or "..." quotation marks)
+    # Handles: „Bez wyjścia" pokaz przedpremierowy w ramach cyklu Spotkania Filozoficzne
+    quoted_match = re.match(r'[„"«](.+?)[""»]\s+.+', title)
+    if quoted_match:
+        title = quoted_match.group(1)
+
     # 3. Strip promotional suffixes after separators
     # We only strip if it's ONE of these: |, –, or a dash surrounded by spaces
     title = re.sub(r'\s*[|–].*$', '', title)
