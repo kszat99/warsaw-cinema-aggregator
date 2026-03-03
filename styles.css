@@ -659,15 +659,19 @@ footer {
 }
 
 .footer-content {
-    max-width: 800px;
+    max-width: 1100px;
     margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    align-items: center;
 }
 
 .footer-section p {
     color: var(--text-secondary);
-    font-size: 1rem;
-    line-height: 1.8;
-    margin-bottom: 0.8rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-bottom: 0;
 }
 
 .footer-section a {
@@ -677,9 +681,14 @@ footer {
 }
 
 .footer-section .refresh-info {
-    margin-top: 1.5rem;
-    font-size: 0.85rem;
     color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+    .footer-content {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
 }
 
 /* Global Animations */
