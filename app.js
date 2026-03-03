@@ -138,8 +138,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderCinemaCheckboxes(cinemasMap) {
-        const container = document.getElementById('cinema-checkboxes');
-        container.innerHTML = '';
+        const toggle = document.getElementById('cinema-dropdown-toggle');
+        const panel = document.getElementById('cinema-dropdown-panel');
+        panel.innerHTML = '';
 
         const sorted = [...cinemasMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
@@ -160,6 +161,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     state.selectedCinemas = state.selectedCinemas.filter(cid => cid !== id);
                     label.classList.remove('selected');
                 }
+                updateToggleText(cinemasMap);
                 applyFilters();
             });
 
@@ -167,8 +169,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             label.appendChild(checkbox);
             label.appendChild(document.createTextNode(name));
-            container.appendChild(label);
+            panel.appendChild(label);
         });
+
+        // Toggle dropdown open/close
+        toggle.addEventListener('click', () => {
+            const isOpen = panel.classList.toggle('open');
+            toggle.classList.toggle('open', isOpen);
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!toggle.contains(e.target) && !panel.contains(e.target)) {
+                panel.classList.remove('open');
+                toggle.classList.remove('open');
+            }
+        });
+
+        updateToggleText(cinemasMap);
+    }
+
+    function updateToggleText(cinemasMap) {
+        const toggle = document.getElementById('cinema-dropdown-toggle');
+        const textSpan = toggle.querySelector('.toggle-text');
+
+        if (state.selectedCinemas.length === 0) {
+            textSpan.textContent = 'Wszystkie kina';
+        } else {
+            const names = state.selectedCinemas
+                .map(id => cinemasMap.get(id))
+                .filter(Boolean);
+            textSpan.textContent = names.join(', ');
+        }
     }
 
     function renderCinemasList(cinemasMap) {
