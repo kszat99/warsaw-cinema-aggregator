@@ -13,6 +13,10 @@ from .adapters.muranow import MuranowAdapter
 from .adapters.kinoteka import KinotekaAdapter
 from .adapters.cinema_city import CinemaCityAdapter
 from .adapters.multikino import MultikinoAdapter
+from .adapters.helios import HeliosAdapter
+from .adapters.iluzjon import IluzjonAdapter
+from .adapters.amondo import AmondoAdapter
+from .adapters.ujazdowski import UjazdowskiAdapter
 from .models import BuildOutput, Screening
 from .normalize import clean_title_for_search
 
@@ -26,12 +30,16 @@ ADAPTER_MAP = {
     "kinoteka": KinotekaAdapter,
     "cinema_city": CinemaCityAdapter,
     "multikino": MultikinoAdapter,
+    "helios": HeliosAdapter,
+    "iluzjon": IluzjonAdapter,
+    "amondo": AmondoAdapter,
+    "ujazdowski": UjazdowskiAdapter,
 }
 
 # Fix for Windows console encoding
-# if sys.platform == "win32":
-#     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-#     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 class PosterService:
     def __init__(self, api_key: str):

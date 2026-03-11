@@ -54,17 +54,17 @@ def clean_title_for_search(title: str) -> str:
     title = re.sub(r'\s*[|–].*$', '', title)
     title = re.sub(r'\s+-\s+.*$', '', title)
     
-    # 4. Remove common trailing garbage words and technical tags
+    # 4. Remove common trailing garbage words and technical tags (as standalone words)
     garbage_patterns = [
         r'\s*dubbing\s*$',
         r'\s*napisy\s*$',
         r'\s*lektor\s*$',
         r'\s*wersja.*\s*$',
-        r'\s*ua\s*$',
-        r'\s*en\s*$',
-        r'\s*pl\s*$',
-        r'\s*dub\s*$',
-        r'\s*nap\s*$',
+        r'\s*\bua\b\s*$',
+        r'\s*\ben\b\s*$',
+        r'\s*\bpl\b\b\s*$',
+        r'\s*\bdub\b\s*$',
+        r'\s*\bnap\b\s*$',
         r'\s*4k\s*$',
         r'\s*2d\s*$',
         r'\s*3d\s*$',
