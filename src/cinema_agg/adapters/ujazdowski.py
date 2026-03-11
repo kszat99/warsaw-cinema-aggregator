@@ -16,134 +16,110 @@ class UjazdowskiAdapter(BaseAdapter):
         super().__init__(cinema_id=cinema_id, cinema_name=cinema_name, base_url=base_url)
         self.portal_url = "https://bilety.u-jazdowski.pl/MSI/mvc/pl"
 
-    async def _get_authorized_titles(self, target_date: date, client: httpx.AsyncClient) -> Set[str]:
+
+    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         """
-        Scrapes the cinema's official repertoire page to get a list of authorized movie titles for the day.
+        Resilient Hybrid Approach:
+        1. Primary: Scrape u-jazdowski.pl/kino/repertuar for the "official" screenings (times, titles, detail links).
+           This is reachable from CI and only includes actual movies.
+        2. Secondary: Attempt to reach the ticketing portal (bilety.u-jazdowski.pl) to get specific booking IDs.
+           If it fails (e.g. in CI), we fall back to the detail links from step 1.
         """
-        authorized_titles = set()
+        screenings: List[Screening] = []
+        
+        # 1. Fetch from Main Site (Primary Source)
         try:
-            # Shift to midnight of the target date for the timestamp
             ts = int(calendar.timegm(target_date.timetuple()))
-            
             url = f"{self.base_url}?ut={ts}"
             response = await client.get(url, follow_redirects=True)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # a.event-list-day-box contains the movie cards for the day specified by ?ut
+            # Cards: a.event-list-day-box
             cards = soup.find_all('a', class_='event-list-day-box')
             for card in cards:
+                # Title
                 title_el = card.find('em')
-                if title_el:
-                    title = title_el.get_text(strip=True)
-                    # Clean title (remove trailing Premiera! if present)
-                    title = re.sub(r'\s*Premiera!\s*$', '', title, flags=re.I).strip()
-                    normalized = normalize_title(title)
-                    authorized_titles.add(normalized)
-            
-            # If no cards found, maybe they use a different selector for mobile or different layout
-            if not authorized_titles:
-                # Fallback: look for generic titles in high-priority headings if cards are missing
-                pass
-                    
-        except Exception as e:
-            print(f"Error fetching authorized titles from Ujazdowski cinema page: {e}")
-            
-        return authorized_titles
-
-    async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
-        """
-        Hybrid approach:
-        1. Get authorized titles from the cinema page (u-jazdowski.pl/kino/repertuar).
-        2. Fetch all events from the ticketing portal (bilety.u-jazdowski.pl).
-        3. Only include portal events that match an authorized title.
-        """
-        screenings = []
-        
-        # 1. Get authorized titles
-        auth_titles = await self._get_authorized_titles(target_date, client)
-        if not auth_titles:
-            # If the cinema page returned nothing, we don't return anything to avoid false positives
-            return screenings
-
-        # 2. Fetch from portal
-        try:
-            response = await client.get(self.portal_url, follow_redirects=True)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # The portal uses an MSI system. Events are in .list-group-item.visible-md
-            items = soup.find_all('div', class_=lambda c: c and 'list-group-item' in c and 'visible-md' in c)
-            
-            for item in items:
-                title_elem = item.find('div', class_='event-title')
-                if not title_elem:
+                if not title_el:
                     continue
-                    
-                title_raw = title_elem.get_text(separator=' ', strip=True)
+                title_raw = title_el.get_text(strip=True)
                 title_raw = re.sub(r'\s*Premiera!\s*$', '', title_raw, flags=re.I).strip()
                 title_norm = normalize_title(title_raw)
                 
-                # Filter: title must be in our authorized list
-                if auth_titles and title_norm not in auth_titles:
+                # Showtime (e.g. 16:30)
+                time_el = card.find('div', class_='hours')
+                if not time_el:
+                    continue
+                time_str = time_el.get_text(strip=True) # "16:30"
+                match = re.search(r'(\d{1,2}):(\d{2})', time_str)
+                if not match:
                     continue
                 
-                # Find badges for the specific date
+                hour = int(match.group(1))
+                minute = int(match.group(2))
+                starts_at = datetime(target_date.year, target_date.month, target_date.day, hour, minute)
+                
+                # Detail Link (Fallback Booking URL)
+                detail_path = card.get('href', '')
+                from urllib.parse import urljoin
+                detail_url = urljoin("https://u-jazdowski.pl", detail_path)
+                
+                screenings.append(
+                    Screening(
+                        cinema_id=self.cinema_id,
+                        cinema_name=self.cinema_name,
+                        title_raw=title_raw,
+                        title_norm=title_norm,
+                        starts_at=starts_at,
+                        booking_url=detail_url # Default to detail page
+                    )
+                )
+        except Exception as e:
+            print(f"Error fetching Ujazdowski from main site for {target_date}: {e}")
+            return [] # If main site is down, we have nothing
+
+        if not screenings:
+            return []
+
+        # 2. Attempt Portal Enhancement (Secondary Source)
+        try:
+            # We use a shorter timeout for the portal in CI if possible, or just catch the timeout
+            response = await client.get(self.portal_url, follow_redirects=True, timeout=10.0) 
+            response.raise_for_status()
+            portal_soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Map of normalized_title + time -> booking_url
+            portal_map = {}
+            # The portal uses .list-group-item.visible-md
+            items = portal_soup.find_all('div', class_=lambda c: c and 'list-group-item' in c and 'visible-md' in c)
+            for item in items:
+                p_title_el = item.find('div', class_='event-title')
+                if not p_title_el: continue
+                p_title_norm = normalize_title(p_title_el.get_text(strip=True))
+                
                 badges = item.find_all('a', class_=re.compile(r'badge'))
                 for badge in badges:
-                    # The badge text is like "11 mar 16:30\n        Przejdź do wyboru..."
                     badge_text = badge.get_text(separator=' ', strip=True)
-                    # We need "11 mar 16:30"
-                    match = re.search(r'(\d{1,2})\s+([a-ząćęłńóśźż]{3})\s+(\d{1,2}):(\d{2})', badge_text, re.I)
-                    if not match:
-                        continue
+                    m = re.search(r'(\d{1,2})\s+([a-ząćęłńóśźż]{3})\s+(\d{1,2}):(\d{2})', badge_text, re.I)
+                    if m:
+                        p_day = int(m.group(1))
+                        # We only care if it's our target date
+                        if p_day != target_date.day: continue
                         
-                    day_num = int(match.group(1))
-                    month_str = match.group(2).lower()
-                    hour = int(match.group(3))
-                    minute = int(match.group(4))
+                        p_time = f"{int(m.group(3)):02d}:{int(m.group(4)):02d}"
+                        b_url = badge.get('href', '')
+                        if b_url:
+                            b_url = urljoin(self.portal_url, b_url)
+                            portal_map[(p_title_norm, p_time)] = b_url
+            
+            # Update screenings with portal links if found
+            for s in screenings:
+                key = (s.title_norm, s.starts_at.strftime("%H:%M"))
+                if key in portal_map:
+                    s.booking_url = portal_map[key]
                     
-                    # Simple month mapping for Polish
-                    months = {
-                        'sty': 1, 'lut': 2, 'mar': 3, 'kwi': 4, 'maj': 5, 'cze': 6,
-                        'lip': 7, 'sie': 8, 'wrz': 9, 'paź': 10, 'lis': 11, 'gru': 12
-                    }
-                    month_num = months.get(month_str[:3])
-                    if not month_num:
-                        continue
-                        
-                    # Check if this badge is for our target date
-                    # Note: We assume the year is the current year or next (for December/January transition)
-                    year = target_date.year
-                    if month_num == 1 and target_date.month == 12:
-                        year += 1
-                    elif month_num == 12 and target_date.month == 1:
-                        year -= 1
-                        
-                    if day_num == target_date.day and month_num == target_date.month:
-                        starts_at = datetime(year, month_num, day_num, hour, minute)
-                        
-                        # Booking URL
-                        booking_url = badge.get('href', '')
-                        if booking_url and not booking_url.startswith('http'):
-                            # Resolve relative URL
-                            from urllib.parse import urljoin
-                            booking_url = urljoin(self.portal_url, booking_url)
-                            
-                        screenings.append(
-                            Screening(
-                                cinema_id=self.cinema_id,
-                                cinema_name=self.cinema_name,
-                                title_raw=title_raw,
-                                title_norm=title_norm,
-                                starts_at=starts_at,
-                                booking_url=booking_url
-                            )
-                        )
-                        
         except Exception as e:
-            import traceback
-            print(f"Error fetching Ujazdowski from portal for {target_date}: {e}")
-            traceback.print_exc()
+            # Silently fail enhancement - we already have the screenings from the main site
+            print(f"Ujazdowski portal enhancement skipped for {target_date} (likely blocked in CI): {e}")
             
         return screenings
