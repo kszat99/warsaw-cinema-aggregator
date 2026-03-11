@@ -142,6 +142,8 @@ class UjazdowskiAdapter(BaseAdapter):
                         )
                         
         except Exception as e:
-            print(f"Error fetching Ujazdowski from portal: {e}")
+            import traceback
+            print(f"Error fetching Ujazdowski from portal for {target_date}: {e}")
+            traceback.print_exc()
             
         return screenings

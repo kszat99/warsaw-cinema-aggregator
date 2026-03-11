@@ -94,6 +94,8 @@ class AmondoAdapter(BaseAdapter):
                         )
                         
         except Exception as e:
+            import traceback
             print(f"Error fetching Amondo for {target_date}: {e}")
+            traceback.print_exc()
             
         return screenings
