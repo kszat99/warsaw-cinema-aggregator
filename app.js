@@ -150,23 +150,54 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         panel.innerHTML = '';
 
+        // Add Search Container
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'cinema-search-container';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Szukaj kina...';
+        searchInput.className = 'cinema-search-input';
+        searchInput.autocomplete = 'off';
+        
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase().trim();
+            const items = panel.querySelectorAll('.cinema-item:not(.all-toggle)');
+            items.forEach(item => {
+                const name = item.textContent.toLowerCase();
+                item.classList.toggle('hidden', term && !name.includes(term));
+            });
+        });
+
+        searchContainer.appendChild(searchInput);
+        panel.appendChild(searchContainer);
+
         // Add "Select/Deselect All" Toggle
         const allToggle = document.createElement('div');
         allToggle.className = 'cinema-item all-toggle';
-        allToggle.innerHTML = `<span>Wszystkie / Żadne</span>`;
+        allToggle.innerHTML = `<span>Wsz. / Żadne (widoczne)</span>`;
         allToggle.addEventListener('click', (e) => {
             e.stopPropagation();
-            const allIds = [...cMap.keys()];
-            const areAllSelected = state.selectedCinemas.length === allIds.length;
+            
+            // Get currently VISIBLE checkboxes
+            const visibleItems = [...panel.querySelectorAll('.cinema-item:not(.all-toggle):not(.hidden)')];
+            const visibleCheckboxes = visibleItems.map(item => item.querySelector('input'));
+            
+            if (visibleCheckboxes.length === 0) return;
 
-            if (areAllSelected) {
-                state.selectedCinemas = [];
-            } else {
-                state.selectedCinemas = allIds;
-            }
+            const areAllVisibleSelected = visibleCheckboxes.every(cb => cb.checked);
+            
+            visibleCheckboxes.forEach(cb => {
+                cb.checked = !areAllVisibleSelected;
+                const id = cb.value;
+                if (cb.checked) {
+                    if (!state.selectedCinemas.includes(id)) state.selectedCinemas.push(id);
+                    cb.parentElement.classList.add('selected');
+                } else {
+                    state.selectedCinemas = state.selectedCinemas.filter(cid => cid !== id);
+                    cb.parentElement.classList.remove('selected');
+                }
+            });
 
-            // Re-render the panel to reflect check states
-            renderCinemaDropdownPanel(cMap, panel);
             updateToggleText();
             applyFilters();
         });
@@ -192,8 +223,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderCinemaDropdownPanel(cMap, panel) {
-        // Clear children except the toggle (first child)
-        while (panel.children.length > 1) {
+        // Clear children except searchContainer and all-toggle
+        while (panel.children.length > 2) {
             panel.removeChild(panel.lastChild);
         }
 

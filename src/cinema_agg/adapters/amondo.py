@@ -80,7 +80,7 @@ class AmondoAdapter(BaseAdapter):
                         
                         starts_at = datetime.combine(target_date, datetime.min.time()).replace(hour=hour, minute=minute)
                         
-                        title_norm = clean_title_for_search(title_raw)
+                        title_norm = normalize_title(title_raw)
                         
                         screenings.append(
                             Screening(

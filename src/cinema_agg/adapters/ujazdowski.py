@@ -118,8 +118,8 @@ class UjazdowskiAdapter(BaseAdapter):
                 if key in portal_map:
                     s.booking_url = portal_map[key]
                     
-        except Exception as e:
+        except Exception:
             # Silently fail enhancement - we already have the screenings from the main site
-            print(f"Ujazdowski portal enhancement skipped for {target_date} (likely blocked in CI): {e}")
+            pass
             
         return screenings
