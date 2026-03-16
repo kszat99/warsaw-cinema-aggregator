@@ -68,26 +68,14 @@ CINEMAS = [
         adapter="cinema_city"
     ),
     Cinema(
-        id="1071",
-        name="Cinema City Galeria Północna",
+        id="1064",
+        name="Cinema City Galeria Północna (Białołęka)",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
         id="1069",
         name="Cinema City Janki",
-        url="https://www.cinema-city.pl/",
-        adapter="cinema_city"
-    ),
-    Cinema(
-        id="1064",
-        name="Cinema City Białołęka",
-        url="https://www.cinema-city.pl/",
-        adapter="cinema_city"
-    ),
-    Cinema(
-        id="1080",
-        name="Cinema City Zielonka",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
