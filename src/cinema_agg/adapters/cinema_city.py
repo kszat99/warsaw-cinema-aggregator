@@ -42,6 +42,10 @@ class CinemaCityAdapter(BaseAdapter):
                 continue
                 
             booking_url = event.get('bookingLink')
+            if not booking_url or booking_url.startswith('/'):
+                # Fallback to the general repertoire page for that day if link is missing or relative
+                # (The adapter currently doesn't handle relative links well)
+                booking_url = f"https://www.cinema-city.pl/pl/buy-tickets-by-cinema?in-cinema={self.cinema_id}&at={target_date.isoformat()}#/buy-tickets-by-cinema?in-cinema={self.cinema_id}&at={target_date.isoformat()}&view-mode=list"
             
             # Extract language/tags from attributes
             attr_ids = set(event.get('attributeIds', []) + film.get('attributeIds', []))
@@ -55,18 +59,19 @@ class CinemaCityAdapter(BaseAdapter):
             
             if "3d" in attr_ids:
                 tags.append("3D")
-            if "imax" in attr_ids or "laser-barco" in attr_ids:
+            if "imax" in attr_ids:
                 tags.append("IMAX")
             if "4dx" in attr_ids:
                 tags.append("4DX")
 
             # Special case for Sadyba: Only include IMAX screenings
-            if self.cinema_id == "1089" and "IMAX" not in tags:
+            # Correct Sadyba ID is 1060 (was 1089)
+            if self.cinema_id == "1060" and "IMAX" not in tags:
                 continue
 
             screenings.append(Screening(
                 cinema_id=self.cinema_id,
-                cinema_name=f"{self.cinema_name} (only IMAX)" if self.cinema_id == "1089" else self.cinema_name,
+                cinema_name=f"{self.cinema_name} (only IMAX)" if self.cinema_id == "1060" else self.cinema_name,
                 title_raw=title_raw,
                 title_norm=normalize_title(title_raw),
                 starts_at=starts_at,

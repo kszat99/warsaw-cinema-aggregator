@@ -38,55 +38,55 @@ CINEMAS = [
         adapter="kinoteka"
     ),
     Cinema(
-        id="1088",
+        id="1074",
         name="Cinema City Arkadia",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1086",
+        id="1061",
         name="Cinema City Bemowo",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1089",
+        id="1060",
         name="Cinema City Sadyba",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1087",
+        id="1070",
         name="Cinema City Galeria Mokotów",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1090",
+        id="1068",
         name="Cinema City Promenada",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1096",
+        id="1071",
         name="Cinema City Galeria Północna",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1091",
+        id="1069",
         name="Cinema City Janki",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1092",
+        id="1064",
         name="Cinema City Białołęka",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
     ),
     Cinema(
-        id="1093",
+        id="1080",
         name="Cinema City Zielonka",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
@@ -136,8 +136,8 @@ CINEMAS = [
     Cinema(
         id="kultura",
         name="Kino Kultura",
-        url="https://kinokultura.bilety24.pl/",
-        adapter="bilety24"
+        url="https://rezerwacja.kinokultura.pl/MSI/mvc/pl",
+        adapter="novekino"
     ),
     Cinema(
         id="amondo",
