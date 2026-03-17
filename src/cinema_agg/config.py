@@ -68,7 +68,7 @@ CINEMAS = [
         adapter="cinema_city"
     ),
     Cinema(
-        id="1064",
+        id="1096",
         name="Cinema City Galeria Północna (Białołęka)",
         url="https://www.cinema-city.pl/",
         adapter="cinema_city"
