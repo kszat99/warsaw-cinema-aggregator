@@ -78,9 +78,10 @@ class PosterService:
                 r.raise_for_status()
                 results = r.json().get("results", [])
                 
-                # If no results in Polish, try global search (English titles)
-                if not results:
-                    params.pop("language")
+                # If no results or first result has no poster, try Global
+                if not results or not results[0].get("poster_path"):
+                    if "language" in params:
+                        params.pop("language")
                     r = await client.get("https://api.themoviedb.org/3/search/movie", params=params, timeout=10)
                     r.raise_for_status()
                     results = r.json().get("results", [])
