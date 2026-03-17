@@ -455,8 +455,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         card.innerHTML = `
             <div class="poster-column">
-                ${movie.poster_url ? `<img src="${movie.poster_url}" alt="${movie.title}" loading="lazy">` :
-                `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:0.8rem;">Brak plakatu</div>`}
+                ${movie.poster_url ? `<img src="${movie.poster_url}" alt="${movie.title}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'poster-fallback\\'>Brak plakatu</div>'">` :
+                `<div class="poster-fallback">Brak plakatu</div>`}
             </div>
             <div class="content-column">
                 <div class="movie-header-info">
