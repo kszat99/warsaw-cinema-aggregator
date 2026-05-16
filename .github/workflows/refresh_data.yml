@@ -1,8 +1,6 @@
 name: Refresh Cinema Data
 
 on:
-  schedule:
-    - cron: '0 4 * * *' # Every day at 4:00 AM UTC
   workflow_dispatch: # Allow manual trigger
     inputs:
       multikino_request_delay_seconds:
@@ -51,6 +49,7 @@ jobs:
         env:
           MULTIKINO_REQUEST_DELAY_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.multikino_request_delay_seconds || '45' }}
           MULTIKINO_RETRY_DELAYS_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.multikino_retry_delays_seconds || '120,300' }}
+          MULTIKINO_PROXY_URL_TEMPLATE: ${{ secrets.MULTIKINO_PROXY_URL_TEMPLATE }}
         run: |
           python -m src.cinema_agg.build
 

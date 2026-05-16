@@ -1,0 +1,41 @@
+name: Deploy Committed Cinema Data
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - index.html
+      - styles.css
+      - app.js
+      - dist/showtimes.json
+      - dist/poster_cache.json
+      - .github/workflows/deploy_committed_data.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build site from committed data
+        run: |
+          test -f dist/showtimes.json
+          mkdir -p site/dist
+          cp index.html styles.css app.js site/
+          cp dist/showtimes.json site/dist/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site

@@ -1,6 +1,8 @@
+import os
 import httpx
 from datetime import date, datetime
 from typing import List
+from urllib.parse import quote
 from ..models import Screening
 from .base import BaseAdapter
 from ..normalize import normalize_title
@@ -11,8 +13,20 @@ except ImportError:
     CurlAsyncSession = None
 
 class MultikinoAdapter(BaseAdapter):
+    _transport_logged = False
+    _proxy_logged = False
+
     async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         # self.cinema_id is the multikino ID string (e.g. "0040")
+        if not MultikinoAdapter._transport_logged:
+            transport = "curl_cffi chrome120" if CurlAsyncSession is not None else "httpx"
+            print(f"  - Multikino transport: {transport}", flush=True)
+            MultikinoAdapter._transport_logged = True
+
+        proxy_template = os.getenv("MULTIKINO_PROXY_URL_TEMPLATE")
+        if proxy_template and not MultikinoAdapter._proxy_logged:
+            print("  - Multikino proxy: enabled via MULTIKINO_PROXY_URL_TEMPLATE", flush=True)
+            MultikinoAdapter._proxy_logged = True
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -43,7 +57,8 @@ class MultikinoAdapter(BaseAdapter):
         }
         
         try:
-            resp = await self._get(api_url, client, params=params, headers=headers)
+            request_url, request_params = self._build_request_url(api_url, params)
+            resp = await self._get(request_url, client, params=request_params, headers=headers)
             
             if resp.status_code != 200:
                 body = resp.text[:200].replace("\n", " ").replace("\r", " ")
@@ -131,3 +146,15 @@ class MultikinoAdapter(BaseAdapter):
 
         async with CurlAsyncSession(impersonate="chrome120", timeout=30) as session:
             return await session.get(url, **kwargs)
+
+    def _build_request_url(self, api_url: str, params: dict):
+        proxy_template = os.getenv("MULTIKINO_PROXY_URL_TEMPLATE")
+        if not proxy_template:
+            return api_url, params
+
+        target_url = str(httpx.URL(api_url, params=params))
+        proxied_url = proxy_template.format(
+            url=quote(target_url, safe=""),
+            raw_url=target_url,
+        )
+        return proxied_url, None
