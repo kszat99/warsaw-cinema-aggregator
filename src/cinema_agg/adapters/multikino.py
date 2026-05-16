@@ -5,6 +5,11 @@ from ..models import Screening
 from .base import BaseAdapter
 from ..normalize import normalize_title
 
+try:
+    from curl_cffi.requests import AsyncSession as CurlAsyncSession
+except ImportError:
+    CurlAsyncSession = None
+
 class MultikinoAdapter(BaseAdapter):
     async def fetch_screenings(self, target_date: date, client: httpx.AsyncClient) -> List[Screening]:
         # self.cinema_id is the multikino ID string (e.g. "0040")
@@ -16,12 +21,13 @@ class MultikinoAdapter(BaseAdapter):
             "Referer": f"{self.base_url}/teraz-gramy",
         }
         
-        main_url = f"{self.base_url}/teraz-gramy"
-        try:
-            # First get cookies from the main page if needed (shared client handles it)
-            await client.get(main_url, headers=headers)
-        except Exception as e:
-            print(f"  - Warning: Multikino preflight failed for {self.cinema_name}: {type(e).__name__}: {e}", flush=True)
+        if CurlAsyncSession is None:
+            main_url = f"{self.base_url}/teraz-gramy"
+            try:
+                # First get cookies from the main page if needed.
+                await client.get(main_url, headers=headers)
+            except Exception as e:
+                print(f"  - Warning: Multikino preflight failed for {self.cinema_name}: {type(e).__name__}: {e}", flush=True)
             
         # 2. Query the showing groups API
         api_url = f"https://www.multikino.pl/api/microservice/showings/cinemas/{self.cinema_id}/films"
@@ -37,7 +43,7 @@ class MultikinoAdapter(BaseAdapter):
         }
         
         try:
-            resp = await client.get(api_url, params=params, headers=headers)
+            resp = await self._get(api_url, client, params=params, headers=headers)
             
             if resp.status_code != 200:
                 body = resp.text[:200].replace("\n", " ").replace("\r", " ")
@@ -118,3 +124,10 @@ class MultikinoAdapter(BaseAdapter):
                     ))
                     
         return screenings
+
+    async def _get(self, url: str, client: httpx.AsyncClient, **kwargs):
+        if CurlAsyncSession is None:
+            return await client.get(url, **kwargs)
+
+        async with CurlAsyncSession(impersonate="chrome120", timeout=30) as session:
+            return await session.get(url, **kwargs)
