@@ -41,8 +41,9 @@ class MultikinoAdapter(BaseAdapter):
             
             if resp.status_code != 200:
                 body = resp.text[:200].replace("\n", " ").replace("\r", " ")
+                reason = "Cloudflare challenge" if "Just a moment" in body else "HTTP error"
                 print(
-                    f"  - Warning: Multikino API returned {resp.status_code} for {self.cinema_name} "
+                    f"  - Warning: Multikino API returned {resp.status_code} ({reason}) for {self.cinema_name} "
                     f"on {target_date}: {body}",
                     flush=True,
                 )

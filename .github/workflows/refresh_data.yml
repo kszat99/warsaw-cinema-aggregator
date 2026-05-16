@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 4 * * *' # Every day at 4:00 AM UTC
   workflow_dispatch: # Allow manual trigger
+    inputs:
+      multikino_request_delay_seconds:
+        description: 'Delay between Multikino date requests'
+        required: false
+        default: '5'
+      multikino_retry_delays_seconds:
+        description: 'Comma-separated Multikino retry delays'
+        required: false
+        default: '15,30'
 
 permissions:
   contents: write
@@ -26,6 +35,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run aggregator build
+        env:
+          MULTIKINO_REQUEST_DELAY_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.multikino_request_delay_seconds || '45' }}
+          MULTIKINO_RETRY_DELAYS_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.multikino_retry_delays_seconds || '120,300' }}
         run: |
           python -m src.cinema_agg.build
 

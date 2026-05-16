@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import sys
 import io
 from datetime import date, timedelta, datetime
@@ -22,6 +23,13 @@ from .normalize import clean_title_for_search
 
 import httpx
 from typing import List, Optional
+
+MULTIKINO_REQUEST_DELAY_SECONDS = int(os.getenv("MULTIKINO_REQUEST_DELAY_SECONDS", "45"))
+MULTIKINO_RETRY_DELAYS_SECONDS = [
+    int(delay)
+    for delay in os.getenv("MULTIKINO_RETRY_DELAYS_SECONDS", "120,300").split(",")
+    if delay.strip()
+]
 
 ADAPTER_MAP = {
     "novekino": NovekinoAdapter,
@@ -99,6 +107,43 @@ class PosterService:
         # This ensures we retry missing posters on every build.
         return None
 
+async def fetch_screenings_for_cinema(adapter, cinema_cfg, date_range, client) -> List[Screening]:
+    if cinema_cfg.adapter != "multikino":
+        tasks = [adapter.fetch_screenings(target_date, client) for target_date in date_range]
+        results = await asyncio.gather(*tasks)
+        return [screening for screenings in results for screening in screenings]
+
+    screenings: List[Screening] = []
+    for index, target_date in enumerate(date_range):
+        if index > 0:
+            print(
+                f"  - Multikino slow mode: waiting {MULTIKINO_REQUEST_DELAY_SECONDS}s before {target_date}",
+                flush=True,
+            )
+            await asyncio.sleep(MULTIKINO_REQUEST_DELAY_SECONDS)
+
+        day_screenings = []
+        for attempt, retry_delay in enumerate([0] + MULTIKINO_RETRY_DELAYS_SECONDS, start=1):
+            if retry_delay:
+                print(
+                    f"  - Multikino slow mode: retrying {target_date} in {retry_delay}s "
+                    f"(attempt {attempt})",
+                    flush=True,
+                )
+                await asyncio.sleep(retry_delay)
+
+            day_screenings = await adapter.fetch_screenings(target_date, client)
+            if day_screenings:
+                break
+
+        print(
+            f"  - Multikino slow mode: {target_date} returned {len(day_screenings)} screenings",
+            flush=True,
+        )
+        screenings.extend(day_screenings)
+
+    return screenings
+
 async def run_build():
     print("Starting Warsaw Cinema Aggregator build...", flush=True)
     
@@ -124,13 +169,10 @@ async def run_build():
             adapter = adapter_cls(cinema_cfg.id, cinema_cfg.name, cinema_cfg.url)
             print(f"Fetching screenings for {cinema_cfg.name} (14 days)...", flush=True)
             
-            tasks = [adapter.fetch_screenings(target_date, client) for target_date in date_range]
             try:
-                results = await asyncio.gather(*tasks)
-                cinema_total = 0
-                for screenings in results:
-                    all_screenings.extend(screenings)
-                    cinema_total += len(screenings)
+                screenings = await fetch_screenings_for_cinema(adapter, cinema_cfg, date_range, client)
+                cinema_total = len(screenings)
+                all_screenings.extend(screenings)
                 cinema_screening_counts[cinema_cfg.id] = cinema_total
                 print(f"  - Completed. Cinema screenings: {cinema_total}. Total screenings: {len(all_screenings)}", flush=True)
             except Exception as e:
