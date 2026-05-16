@@ -13,13 +13,26 @@ on:
         description: 'Comma-separated Multikino retry delays'
         required: false
         default: '15,30'
+      runner:
+        description: 'GitHub-hosted runner to use'
+        required: false
+        default: 'ubuntu-latest'
+        type: choice
+        options:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
 
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner || 'ubuntu-latest' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
