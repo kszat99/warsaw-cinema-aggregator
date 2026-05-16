@@ -1,7 +1,9 @@
 param(
     [string]$TaskName = "Warsaw Cinema Aggregator Local Refresh",
     [string]$DailyAt = "03:00",
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+    [switch]$AtLogOn,
+    [switch]$Daily
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,7 +17,18 @@ $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -RepoRoot `"$RepoRoot`""
 
-$trigger = New-ScheduledTaskTrigger -Daily -At $DailyAt
+if (-not $AtLogOn -and -not $Daily) {
+    $Daily = $true
+}
+
+$triggers = @()
+if ($Daily) {
+    $triggers += New-ScheduledTaskTrigger -Daily -At $DailyAt
+}
+if ($AtLogOn) {
+    $triggers += New-ScheduledTaskTrigger -AtLogOn
+}
+
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
@@ -25,9 +38,17 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
-    -Trigger $trigger `
+    -Trigger $triggers `
     -Settings $settings `
     -Description "Builds Warsaw cinema data locally, commits dist/showtimes.json, and pushes it for GitHub Pages deploy." `
     -Force
 
-Write-Host "Registered scheduled task '$TaskName' for every day at $DailyAt."
+$triggerDescription = @()
+if ($Daily) {
+    $triggerDescription += "every day at $DailyAt"
+}
+if ($AtLogOn) {
+    $triggerDescription += "at logon"
+}
+
+Write-Host "Registered scheduled task '$TaskName' for $($triggerDescription -join ' and ')."

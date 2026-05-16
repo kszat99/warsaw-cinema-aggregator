@@ -28,7 +28,7 @@ MULTIKINO_REQUEST_DELAY_SECONDS = int(os.getenv("MULTIKINO_REQUEST_DELAY_SECONDS
 MULTIKINO_RETRY_DELAYS_SECONDS = [
     int(delay)
     for delay in os.getenv("MULTIKINO_RETRY_DELAYS_SECONDS", "120,300").split(",")
-    if delay.strip()
+    if delay.strip() and int(delay) > 0
 ]
 
 ADAPTER_MAP = {
