@@ -10,16 +10,18 @@ class MultikinoAdapter(BaseAdapter):
         # self.cinema_id is the multikino ID string (e.g. "0040")
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": f"{self.base_url}/teraz-gramy",
         }
         
         main_url = f"{self.base_url}/teraz-gramy"
         try:
             # First get cookies from the main page if needed (shared client handles it)
             await client.get(main_url, headers=headers)
-        except Exception:
-            return []
+        except Exception as e:
+            print(f"  - Warning: Multikino preflight failed for {self.cinema_name}: {type(e).__name__}: {e}", flush=True)
             
         # 2. Query the showing groups API
         api_url = f"https://www.multikino.pl/api/microservice/showings/cinemas/{self.cinema_id}/films"
@@ -38,9 +40,16 @@ class MultikinoAdapter(BaseAdapter):
             resp = await client.get(api_url, params=params, headers=headers)
             
             if resp.status_code != 200:
+                body = resp.text[:200].replace("\n", " ").replace("\r", " ")
+                print(
+                    f"  - Warning: Multikino API returned {resp.status_code} for {self.cinema_name} "
+                    f"on {target_date}: {body}",
+                    flush=True,
+                )
                 return []
             data = resp.json()
-        except Exception:
+        except Exception as e:
+            print(f"  - Warning: Multikino API failed for {self.cinema_name} on {target_date}: {type(e).__name__}: {e}", flush=True)
             return []
             
         screenings = []

@@ -107,6 +107,7 @@ async def run_build():
     date_range = [today + timedelta(days=i) for i in range(14)]
     
     all_screenings: List[Screening] = []
+    cinema_screening_counts = {}
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -126,11 +127,22 @@ async def run_build():
             tasks = [adapter.fetch_screenings(target_date, client) for target_date in date_range]
             try:
                 results = await asyncio.gather(*tasks)
+                cinema_total = 0
                 for screenings in results:
                     all_screenings.extend(screenings)
-                print(f"  - Completed. Total screenings: {len(all_screenings)}", flush=True)
+                    cinema_total += len(screenings)
+                cinema_screening_counts[cinema_cfg.id] = cinema_total
+                print(f"  - Completed. Cinema screenings: {cinema_total}. Total screenings: {len(all_screenings)}", flush=True)
             except Exception as e:
                 print(f"\n  - Error fetching {cinema_cfg.name}: {e}", flush=True)
+
+    multikino_configs = [c for c in CINEMAS if c.adapter == "multikino"]
+    multikino_total = sum(cinema_screening_counts.get(c.id, 0) for c in multikino_configs)
+    if multikino_configs and multikino_total == 0:
+        raise RuntimeError(
+            "Multikino returned 0 screenings across all configured cinemas. "
+            "Refusing to publish a partial build; check the Multikino warnings above."
+        )
                 
     # Deduplicate: (starts_at, title_norm, cinema_id)
     seen = set()
