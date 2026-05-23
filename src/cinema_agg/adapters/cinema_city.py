@@ -47,8 +47,9 @@ class CinemaCityAdapter(BaseAdapter):
                 # (The adapter currently doesn't handle relative links well)
                 booking_url = f"https://www.cinema-city.pl/pl/buy-tickets-by-cinema?in-cinema={self.cinema_id}&at={target_date.isoformat()}#/buy-tickets-by-cinema?in-cinema={self.cinema_id}&at={target_date.isoformat()}&view-mode=list"
             
-            # Extract language/tags from attributes
-            attr_ids = set(event.get('attributeIds', []) + film.get('attributeIds', []))
+            # Extract language/tags from event attributes. Film attributes describe every
+            # available variant of the film, not this specific screening.
+            attr_ids = set(event.get('attributeIds', []))
             lang = "org"
             tags = []
             
