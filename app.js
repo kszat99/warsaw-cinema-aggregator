@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 1. Fetch Data
     try {
-        const response = await fetch('dist/showtimes.json');
+        const response = await fetch(`dist/showtimes.json?v=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) throw new Error('Data file not found');
         const data = await response.json();
 
