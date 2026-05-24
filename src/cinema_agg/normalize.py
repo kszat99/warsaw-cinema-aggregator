@@ -1,3 +1,4 @@
+import html
 import re
 import unicodedata
 from typing import Tuple, List
@@ -22,6 +23,8 @@ def normalize_title(title: str) -> str:
     """Advanced normalization: strip promo suffixes, lowercase, remove punctuation for deduplication."""
     if not title:
         return ""
+
+    title = html.unescape(title)
     
     # 1. Clean from promotional garbage first
     title = clean_title_for_search(title)
@@ -32,6 +35,9 @@ def normalize_title(title: str) -> str:
     # 2b. Strip diacritics so "Romería" and "Romeria" group together.
     title = unicodedata.normalize("NFKD", title)
     title = "".join(ch for ch in title if not unicodedata.combining(ch))
+
+    title = re.sub(r'\s*&\s*', ' i ', title)
+    title = re.sub(r'\band\b', 'i', title)
     
     # 3. Remove all non-alphanumeric characters (keep local characters)
     # This ensures "Father, Mother" and "Father Mother" are identical
@@ -56,6 +62,8 @@ def clean_title_for_search(title: str) -> str:
     """Strips promotional garbage but keeps the 'clean' human-readable title."""
     if not title:
         return ""
+
+    title = html.unescape(title)
 
     # 1. Remove common bracketed/parentheses tags first
     title = re.sub(r'\[.*?\]', '', title)
