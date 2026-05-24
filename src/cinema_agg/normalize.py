@@ -1,5 +1,22 @@
 import re
+import unicodedata
 from typing import Tuple, List
+
+ROMAN_NUMERALS = {
+    "ii": "2",
+    "iii": "3",
+    "iv": "4",
+    "v": "5",
+    "vi": "6",
+    "vii": "7",
+    "viii": "8",
+    "ix": "9",
+    "x": "10",
+}
+
+TITLE_PREFIXES_TO_DROP = [
+    "gwiezdne wojny",
+]
 
 def normalize_title(title: str) -> str:
     """Advanced normalization: strip promo suffixes, lowercase, remove punctuation for deduplication."""
@@ -11,6 +28,10 @@ def normalize_title(title: str) -> str:
     
     # 2. Lowercase and strip
     title = title.lower().strip()
+
+    # 2b. Strip diacritics so "Romería" and "Romeria" group together.
+    title = unicodedata.normalize("NFKD", title)
+    title = "".join(ch for ch in title if not unicodedata.combining(ch))
     
     # 3. Remove all non-alphanumeric characters (keep local characters)
     # This ensures "Father, Mother" and "Father Mother" are identical
@@ -18,7 +39,17 @@ def normalize_title(title: str) -> str:
     
     # 4. Standardize whitespace
     title = re.sub(r'\s+', ' ', title)
-    
+
+    for prefix in TITLE_PREFIXES_TO_DROP:
+        if title.startswith(prefix + " "):
+            title = title[len(prefix):].strip()
+
+    title = re.sub(
+        r'\b(ii|iii|iv|v|vi|vii|viii|ix|x)\b',
+        lambda match: ROMAN_NUMERALS[match.group(1)],
+        title,
+    )
+
     return title.strip()
 
 def clean_title_for_search(title: str) -> str:

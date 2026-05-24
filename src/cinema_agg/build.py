@@ -144,6 +144,33 @@ async def fetch_screenings_for_cinema(adapter, cinema_cfg, date_range, client) -
 
     return screenings
 
+def apply_title_canonicalization(screenings: List[Screening]) -> None:
+    title_norms = sorted({s.title_norm for s in screenings if s.title_norm}, key=len, reverse=True)
+    canonical_by_norm = {}
+
+    for short_title in sorted(title_norms, key=len):
+        if len(short_title) < 16:
+            continue
+
+        for long_title in title_norms:
+            if len(long_title) <= len(short_title):
+                continue
+            if not long_title.startswith(short_title):
+                continue
+
+            # Only merge apparent mid-word truncation, e.g. "... ale ko" -> "... ale kosmos".
+            # Avoid merging real sequel/title variants like "mortal kombat" -> "mortal kombat 2".
+            next_char = long_title[len(short_title)]
+            if next_char != " ":
+                canonical_by_norm[short_title] = long_title
+                break
+
+    if canonical_by_norm:
+        print(f"Canonicalized {len(canonical_by_norm)} truncated title variants.", flush=True)
+
+    for screening in screenings:
+        screening.title_norm = canonical_by_norm.get(screening.title_norm, screening.title_norm)
+
 async def run_build():
     print("Starting Warsaw Cinema Aggregator build...", flush=True)
     
@@ -185,6 +212,8 @@ async def run_build():
             "Multikino returned 0 screenings across all configured cinemas. "
             "Refusing to publish a partial build; check the Multikino warnings above."
         )
+
+    apply_title_canonicalization(all_screenings)
                 
     # Deduplicate: (starts_at, title_norm, cinema_id)
     seen = set()
