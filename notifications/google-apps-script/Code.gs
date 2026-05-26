@@ -2,7 +2,7 @@ const CONFIG = {
   SHEET_NAME: 'Alerts',
   SHOWTIMES_URL: 'https://kszat99.github.io/warsaw-cinema-aggregator/dist/showtimes.json',
   SITE_URL: 'https://kszat99.github.io/warsaw-cinema-aggregator/',
-  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycby35k6nVB_cBXaloi56XPQQOKeNUuDV2pTuRcXgq2HmBztXt8XbNHFJMYxuVkXvWY_d/exec',
+  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbxIK95ObG84btroQNgjJzkWzG6HEAjg2zbDttXwnOgKpuhwZCMFlftKHNA828IPr-7T/exec',
   MAX_SCREENINGS_IN_EMAIL: 12,
   MIN_QUERY_LENGTH: 4,
 };
