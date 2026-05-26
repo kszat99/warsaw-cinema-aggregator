@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Prepare unique dates from the data
         const uniqueDates = [...new Set(allScreenings.map(s => s.starts_at.split('T')[0]))].sort();
         state.selectedDate = uniqueDates[0] || new Date().toISOString().split('T')[0];
+        applyUrlParams();
 
         // Prepare unique cinemas
         allScreenings.forEach(s => {
@@ -69,14 +70,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         searchAllDates.addEventListener('change', (e) => {
             state.searchAll = e.target.checked;
-            dateSelector.parentElement.style.opacity = state.searchAll ? '0.2' : '1';
-            dateSelector.parentElement.style.filter = state.searchAll ? 'grayscale(1)' : 'none';
-            dateSelector.parentElement.style.pointerEvents = state.searchAll ? 'none' : 'auto';
+            updateSearchAllDatesUI();
             applyFilters();
         });
 
         // Initial Render
+        updateSearchAllDatesUI();
         applyFilters();
+    }
+
+    function applyUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get('q');
+        const searchAll = params.get('all');
+
+        if (query) {
+            state.searchQuery = query.toLowerCase();
+            searchInput.value = query;
+        }
+
+        if (searchAll === '1' || searchAll === 'true') {
+            state.searchAll = true;
+            searchAllDates.checked = true;
+        }
+    }
+
+    function updateSearchAllDatesUI() {
+        dateSelector.parentElement.style.opacity = state.searchAll ? '0.2' : '1';
+        dateSelector.parentElement.style.filter = state.searchAll ? 'grayscale(1)' : 'none';
+        dateSelector.parentElement.style.pointerEvents = state.searchAll ? 'none' : 'auto';
     }
 
     // ──────────── Last Update UI ────────────

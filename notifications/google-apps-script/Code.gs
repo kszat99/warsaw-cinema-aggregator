@@ -177,47 +177,57 @@ function findMatches_(queryNorm, screenings) {
   }
 
   return byMovie[bestTitle]
-    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))
-    .slice(0, CONFIG.MAX_SCREENINGS_IN_EMAIL);
+    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
 }
 
 function sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken) {
   const baseUrl = getWebAppUrl_();
   const confirmUrl = `${baseUrl}?action=confirm&token=${encodeURIComponent(confirmToken)}`;
   const cancelUrl = `${baseUrl}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
+  const subject = `Warsaw Cinemas Screenings Aggregator - Confirm your ${queryRaw} Movie Alert`;
 
   const body = [
-    `Confirm your Warsaw cinema alert for: "${queryRaw}"`,
+    'Warsaw Cinemas Screenings Aggregator',
     '',
-    'Click to confirm:',
+    `Confirm your movie alert for: "${queryRaw}"`,
+    '',
+    'We will send one email when this movie first appears in Warsaw cinemas.',
+    '',
+    'Confirm alert:',
     confirmUrl,
     '',
-    "If this wasn't you, ignore this email or cancel it here:",
+    "If this wasn't you, you can ignore this email or cancel the alert:",
     cancelUrl,
   ].join('\n');
 
   MailApp.sendEmail({
     to: email,
-    subject: `Confirm cinema alert: ${queryRaw}`,
+    subject,
     body,
+    htmlBody: buildConfirmationHtml_(queryRaw, confirmUrl, cancelUrl),
   });
 }
 
 function sendMatchEmail_(email, queryRaw, matches, cancelToken) {
   const cancelUrl = `${getWebAppUrl_()}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
-  const lines = matches.map((screening) => {
-    const date = String(screening.starts_at || '').replace('T', ' ').slice(0, 16);
-    const tags = screening.tags && screening.tags.length ? ` (${screening.tags.join(', ')})` : '';
-    return `- ${date} | ${screening.cinema_name} | ${screening.title_raw}${tags}`;
-  });
+  const appUrl = buildAggregatorUrl_(queryRaw);
+  const summary = buildMatchSummary_(matches);
+  const subject = `Warsaw Cinemas Screenings Aggregator - ${queryRaw} is now screening in Warsaw :)`;
+  const title = matches[0].title_raw || queryRaw;
+  const lines = buildPlainTextMatchLines_(summary);
 
   const body = [
+    'Warsaw Cinemas Screenings Aggregator',
+    '',
     `Good news. "${queryRaw}" is now screening in Warsaw.`,
     '',
-    'Earliest matching screenings:',
+    `Found ${summary.totalScreenings} screenings across ${summary.totalCinemas} cinemas and ${summary.totalDays} days.`,
+    `Earliest screening: ${formatDateTimeText_(summary.earliest.starts_at)}.`,
+    '',
+    'Earliest days:',
     ...lines,
     '',
-    `Open the cinema aggregator: ${CONFIG.SITE_URL}`,
+    `Open all matching screenings: ${appUrl}`,
     '',
     'This was a one-time alert, so you will not receive more emails for it.',
     `Cancel link: ${cancelUrl}`,
@@ -225,9 +235,207 @@ function sendMatchEmail_(email, queryRaw, matches, cancelToken) {
 
   MailApp.sendEmail({
     to: email,
-    subject: `Cinema alert: ${queryRaw} is screening`,
+    subject,
     body,
+    htmlBody: buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl),
   });
+}
+
+function buildConfirmationHtml_(queryRaw, confirmUrl, cancelUrl) {
+  return emailShell_(`
+    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#f8fafc;">Confirm your movie alert</h1>
+    <p style="margin:0 0 18px;color:#cbd5e1;font-size:15px;line-height:1.6;">
+      We will send one email when this movie first appears in Warsaw cinemas.
+    </p>
+    <div style="margin:0 0 22px;padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:12px;background:#0f172a;">
+      <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Movie alert</div>
+      <div style="font-size:22px;font-weight:700;color:#f8fafc;">${escapeHtml_(queryRaw)}</div>
+    </div>
+    ${buttonHtml_(confirmUrl, 'Confirm alert')}
+    <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">
+      No account needed. This is a one-time notification. If this was not you, you can ignore this email
+      or <a href="${cancelUrl}" style="color:#67e8f9;">cancel the alert</a>.
+    </p>
+  `);
+}
+
+function buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl) {
+  const posterHtml = summary.posterUrl
+    ? `<td style="width:96px;padding:0 18px 18px 0;vertical-align:top;">
+         <img src="${summary.posterUrl}" alt="${escapeHtml_(title)} poster" width="96" style="display:block;width:96px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);">
+       </td>`
+    : '';
+  const dayHtml = summary.days.map(buildDayHtml_).join('');
+
+  return emailShell_(`
+    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#f8fafc;">Good news - "${escapeHtml_(queryRaw)}" is screening.</h1>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:0 0 18px;">
+      <tr>
+        ${posterHtml}
+        <td style="vertical-align:top;padding:0 0 18px;">
+          <p style="margin:0 0 8px;color:#cbd5e1;font-size:15px;line-height:1.6;">
+            Found <strong style="color:#f8fafc;">${summary.totalScreenings}</strong> screenings across
+            <strong style="color:#f8fafc;">${summary.totalCinemas}</strong> cinemas and
+            <strong style="color:#f8fafc;">${summary.totalDays}</strong> days.
+          </p>
+          <p style="margin:0;color:#94a3b8;font-size:14px;line-height:1.5;">
+            Earliest screening: ${escapeHtml_(formatDateTimeText_(summary.earliest.starts_at))}
+          </p>
+        </td>
+      </tr>
+    </table>
+    <h2 style="margin:4px 0 12px;font-size:17px;color:#f8fafc;">Earliest days</h2>
+    ${dayHtml}
+    ${buttonHtml_(appUrl, 'View all matching screenings')}
+    <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">
+      This was a one-time alert, so you will not receive more emails for it.
+      <a href="${cancelUrl}" style="color:#67e8f9;">Cancel alert</a>
+    </p>
+  `);
+}
+
+function buildMatchSummary_(matches) {
+  const sorted = matches.slice().sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
+  const cinemaNames = new Set(sorted.map((screening) => screening.cinema_name).filter(Boolean));
+  const dayKeys = new Set(sorted.map((screening) => getDayKey_(screening.starts_at)).filter(Boolean));
+  const dayMap = {};
+
+  sorted.forEach((screening) => {
+    const dayKey = getDayKey_(screening.starts_at);
+    if (!dayKey) {
+      return;
+    }
+    if (!dayMap[dayKey]) {
+      dayMap[dayKey] = [];
+    }
+    dayMap[dayKey].push(screening);
+  });
+
+  const days = Object.keys(dayMap)
+    .sort()
+    .slice(0, 3)
+    .map((dayKey) => ({
+      dayKey,
+      label: formatDayLabel_(dayKey),
+      total: dayMap[dayKey].length,
+      cinemas: groupDayByCinema_(dayMap[dayKey]),
+    }));
+
+  return {
+    totalScreenings: sorted.length,
+    totalCinemas: cinemaNames.size,
+    totalDays: dayKeys.size,
+    earliest: sorted[0],
+    posterUrl: (sorted.find((screening) => screening.poster_url) || {}).poster_url || '',
+    days,
+  };
+}
+
+function groupDayByCinema_(screenings) {
+  const byCinema = {};
+  screenings.forEach((screening) => {
+    const cinema = screening.cinema_name || 'Unknown cinema';
+    if (!byCinema[cinema]) {
+      byCinema[cinema] = [];
+    }
+    byCinema[cinema].push(screening);
+  });
+
+  return Object.keys(byCinema).sort().map((cinemaName) => ({
+    cinemaName,
+    screenings: byCinema[cinemaName].sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at))),
+  }));
+}
+
+function buildDayHtml_(day) {
+  const cinemaRows = day.cinemas.map((cinema) => {
+    const timeLinks = cinema.screenings.map((screening) => {
+      const time = escapeHtml_(formatTime_(screening.starts_at));
+      const href = screening.booking_url || CONFIG.SITE_URL;
+      return `<a href="${href}" style="display:inline-block;margin:0 6px 6px 0;color:#f8fafc;text-decoration:none;background:#1e293b;border:1px solid rgba(255,255,255,0.12);border-radius:999px;padding:5px 9px;font-size:13px;">${time}</a>`;
+    }).join('');
+    return `
+      <tr>
+        <td style="padding:8px 0 2px;color:#67e8f9;font-weight:700;font-size:14px;">${escapeHtml_(cinema.cinemaName)}</td>
+      </tr>
+      <tr>
+        <td style="padding:0 0 8px;">${timeLinks}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div style="margin:0 0 14px;padding:14px;border:1px solid rgba(255,255,255,0.10);border-radius:12px;background:#0f172a;">
+      <div style="margin:0 0 6px;color:#f8fafc;font-weight:800;font-size:15px;">
+        ${escapeHtml_(day.label)} - ${day.total} screenings
+      </div>
+      <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">
+        ${cinemaRows}
+      </table>
+    </div>
+  `;
+}
+
+function buildPlainTextMatchLines_(summary) {
+  const lines = [];
+  summary.days.forEach((day) => {
+    lines.push('');
+    lines.push(`${day.label} - ${day.total} screenings`);
+    day.cinemas.forEach((cinema) => {
+      const times = cinema.screenings.map((screening) => formatTime_(screening.starts_at)).join(' · ');
+      lines.push(`${cinema.cinemaName} - ${times}`);
+    });
+  });
+  return lines;
+}
+
+function emailShell_(contentHtml) {
+  return `
+    <div style="margin:0;padding:0;background:#020617;color:#f8fafc;font-family:Arial,Helvetica,sans-serif;">
+      <div style="max-width:640px;margin:0 auto;padding:28px 16px;">
+        <div style="margin:0 0 16px;font-size:14px;font-weight:800;color:#67e8f9;letter-spacing:0.02em;">
+          Warsaw Cinemas Screenings Aggregator
+        </div>
+        <div style="border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:#111827;padding:24px;box-shadow:0 16px 40px rgba(0,0,0,0.35);">
+          ${contentHtml}
+        </div>
+        <p style="margin:16px 0 0;color:#64748b;font-size:12px;line-height:1.5;">
+          This email was sent by Warsaw Cinemas Screenings Aggregator because a movie alert was created with this address.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function buttonHtml_(url, label) {
+  return `<a href="${url}" style="display:inline-block;background:#8b5cf6;color:#ffffff;text-decoration:none;border-radius:999px;padding:12px 18px;font-weight:800;font-size:14px;">${escapeHtml_(label)}</a>`;
+}
+
+function buildAggregatorUrl_(queryRaw) {
+  return `${CONFIG.SITE_URL}?q=${encodeURIComponent(queryRaw)}&all=1`;
+}
+
+function getDayKey_(startsAt) {
+  return String(startsAt || '').slice(0, 10);
+}
+
+function formatDayLabel_(dayKey) {
+  const parts = String(dayKey).split('-');
+  if (parts.length !== 3) {
+    return dayKey;
+  }
+  return `${parts[2]}/${parts[1]}`;
+}
+
+function formatTime_(startsAt) {
+  return String(startsAt || '').replace('T', ' ').slice(11, 16);
+}
+
+function formatDateTimeText_(startsAt) {
+  const value = String(startsAt || '');
+  const day = formatDayLabel_(value.slice(0, 10));
+  const time = formatTime_(value);
+  return `${day} at ${time}`;
 }
 
 function normalizeTitle_(title) {
