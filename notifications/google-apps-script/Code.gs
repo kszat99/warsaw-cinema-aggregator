@@ -31,11 +31,13 @@ function onFormSubmit(e) {
   ensureHeader_(sheet);
 
   const values = getFormValues_(e);
+  console.log(`Form submit parsed as email="${values.email}", query="${values.query}"`);
   const email = values.email;
   const queryRaw = values.query;
   const queryNorm = normalizeTitle_(queryRaw);
 
   if (!email || !queryRaw || queryNorm.length < CONFIG.MIN_QUERY_LENGTH) {
+    console.log(`Skipping form response. namedValues=${JSON.stringify(e && e.namedValues ? e.namedValues : {})}`);
     return;
   }
 
@@ -257,10 +259,69 @@ function normalizeTitle_(title) {
 
 function getFormValues_(e) {
   const named = e && e.namedValues ? e.namedValues : {};
+  const entries = Object.keys(named).map((key) => ({
+    key,
+    keyNorm: normalizeFieldName_(key),
+    value: firstValue_(named[key]),
+  }));
+
+  let email = '';
+  let query = '';
+
+  const emailEntry = entries.find((entry) =>
+    entry.keyNorm.includes('email')
+    || entry.keyNorm.includes('mail')
+    || entry.keyNorm.includes('adres e mail')
+  );
+  if (emailEntry) {
+    email = emailEntry.value;
+  }
+
+  if (!email) {
+    const emailValueEntry = entries.find((entry) => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(entry.value));
+    if (emailValueEntry) {
+      email = emailValueEntry.value;
+    }
+  }
+
+  const queryEntry = entries.find((entry) =>
+    entry.keyNorm === 'film'
+    || entry.keyNorm.includes('film')
+    || entry.keyNorm.includes('movie')
+    || entry.keyNorm.includes('tytul')
+    || entry.keyNorm.includes('title')
+  );
+  if (queryEntry) {
+    query = queryEntry.value;
+  }
+
+  if (!query) {
+    const fallbackEntry = entries.find((entry) =>
+      entry.value
+      && entry.value !== email
+      && !/[^@\s]+@[^@\s]+\.[^@\s]+/.test(entry.value)
+      && !entry.keyNorm.includes('timestamp')
+      && !entry.keyNorm.includes('sygnatura')
+    );
+    if (fallbackEntry) {
+      query = fallbackEntry.value;
+    }
+  }
+
   return {
-    email: firstValue_(named.Email || named.email || named['Adres email'] || named['Adres e-mail']),
-    query: firstValue_(named.Movie || named.movie || named.Film || named.film || named['Tytul filmu'] || named['Tytuł filmu']),
+    email,
+    query,
   };
+}
+
+function normalizeFieldName_(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function firstValue_(value) {
