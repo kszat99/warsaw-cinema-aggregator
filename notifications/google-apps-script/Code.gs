@@ -2,6 +2,7 @@ const CONFIG = {
   SHEET_NAME: 'Alerts',
   SHOWTIMES_URL: 'https://kszat99.github.io/warsaw-cinema-aggregator/dist/showtimes.json',
   SITE_URL: 'https://kszat99.github.io/warsaw-cinema-aggregator/',
+  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycby35k6nVB_cBXaloi56XPQQOKeNUuDV2pTuRcXgq2HmBztXt8XbNHFJMYxuVkXvWY_d/exec',
   MAX_SCREENINGS_IN_EMAIL: 12,
   MIN_QUERY_LENGTH: 4,
 };
@@ -181,7 +182,7 @@ function findMatches_(queryNorm, screenings) {
 }
 
 function sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken) {
-  const baseUrl = ScriptApp.getService().getUrl();
+  const baseUrl = getWebAppUrl_();
   const confirmUrl = `${baseUrl}?action=confirm&token=${encodeURIComponent(confirmToken)}`;
   const cancelUrl = `${baseUrl}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
 
@@ -203,7 +204,7 @@ function sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken) {
 }
 
 function sendMatchEmail_(email, queryRaw, matches, cancelToken) {
-  const cancelUrl = `${ScriptApp.getService().getUrl()}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
+  const cancelUrl = `${getWebAppUrl_()}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
   const lines = matches.map((screening) => {
     const date = String(screening.starts_at || '').replace('T', ' ').slice(0, 16);
     const tags = screening.tags && screening.tags.length ? ` (${screening.tags.join(', ')})` : '';
@@ -366,6 +367,10 @@ function columnIndex_(name) {
 
 function makeToken_() {
   return Utilities.getUuid() + '-' + Utilities.getUuid();
+}
+
+function getWebAppUrl_() {
+  return CONFIG.WEB_APP_URL || ScriptApp.getService().getUrl();
 }
 
 function html_(message) {
