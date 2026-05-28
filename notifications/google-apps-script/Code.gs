@@ -286,7 +286,7 @@ function sendMatchEmail_(email, queryRaw, matches, cancelToken, options) {
     : `Good news. "${queryRaw}" is now screening in Warsaw.`;
   const screeningLabel = alertType === 'persistent' ? 'new screenings' : 'screenings';
   const footerLine = alertType === 'persistent'
-    ? 'This is a persistent alert. You will only receive future emails when new matching screenings appear.'
+    ? 'This is a persistent alert. You will only receive future emails when new matching screenings appear. To stop receiving emails for this alert, use the cancel link below.'
     : 'This was a one-time alert, so you will not receive more emails for it.';
 
   const body = [
@@ -352,7 +352,7 @@ function buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl, alertType,
     ? `New${formatFilter === 'imax' ? ' IMAX' : ''} screenings for "${queryRaw}"`
     : `Good news - "${queryRaw}" is screening.`;
   const footerLine = alertType === 'persistent'
-    ? 'This is a persistent alert. Future emails will include only newly detected matching screenings.'
+    ? 'This is a persistent alert. Future emails will include only newly detected matching screenings. To stop receiving emails for this alert, use the cancel link below.'
     : 'This was a one-time alert, so you will not receive more emails for it.';
   const screeningLabel = alertType === 'persistent' ? 'new screenings' : 'screenings';
 
