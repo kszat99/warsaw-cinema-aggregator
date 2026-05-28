@@ -20,6 +20,10 @@ const COLUMNS = [
   'notified_at',
   'matched_title',
   'matched_screenings_json',
+  'alert_type',
+  'format_filter',
+  'reported_screening_keys',
+  'last_checked_at',
 ];
 
 function setup() {
@@ -36,6 +40,8 @@ function onFormSubmit(e) {
   const email = values.email;
   const queryRaw = values.query;
   const queryNorm = normalizeTitle_(queryRaw);
+  const alertType = values.alertType;
+  const formatFilter = values.formatFilter;
 
   if (!email || !queryRaw || queryNorm.length < CONFIG.MIN_QUERY_LENGTH) {
     console.log(`Skipping form response. namedValues=${JSON.stringify(e && e.namedValues ? e.namedValues : {})}`);
@@ -59,9 +65,13 @@ function onFormSubmit(e) {
     '',
     '',
     '',
+    alertType,
+    formatFilter,
+    '',
+    '',
   ]);
 
-  sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken);
+  sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken, alertType, formatFilter);
 }
 
 function doGet(e) {
@@ -104,20 +114,55 @@ function runAlertCheck() {
       return;
     }
 
-    const matches = findMatches_(row.query_norm, screenings);
+    const alertType = getAlertType_(row);
+    const formatFilter = getFormatFilter_(row);
+    const matches = findMatches_(row.query_norm, screenings, formatFilter);
+    const now = new Date().toISOString();
+
+    sheet.getRange(row.rowNumber, columnIndex_('last_checked_at')).setValue(now);
+
     if (matches.length === 0) {
       return;
     }
 
-    sendMatchEmail_(row.email, row.query_raw, matches, row.cancel_token);
+    if (alertType === 'persistent') {
+      const reportedKeys = parseJsonArray_(row.reported_screening_keys);
+      const reportedSet = new Set(reportedKeys);
+      const newMatches = matches.filter((match) => !reportedSet.has(screeningKey_(match)));
+
+      if (newMatches.length === 0) {
+        return;
+      }
+
+      sendMatchEmail_(row.email, row.query_raw, newMatches, row.cancel_token, {
+        alertType,
+        formatFilter,
+      });
+
+      const nextKeys = Array.from(new Set(reportedKeys.concat(newMatches.map(screeningKey_))));
+      const matchedTitle = newMatches[0].title_raw || newMatches[0].title_norm;
+      sheet.getRange(row.rowNumber, columnIndex_('notified_at')).setValue(now);
+      sheet.getRange(row.rowNumber, columnIndex_('matched_title')).setValue(matchedTitle);
+      sheet
+        .getRange(row.rowNumber, columnIndex_('matched_screenings_json'))
+        .setValue(JSON.stringify(newMatches.slice(0, CONFIG.MAX_SCREENINGS_IN_EMAIL)));
+      sheet.getRange(row.rowNumber, columnIndex_('reported_screening_keys')).setValue(JSON.stringify(nextKeys));
+      return;
+    }
+
+    sendMatchEmail_(row.email, row.query_raw, matches, row.cancel_token, {
+      alertType,
+      formatFilter,
+    });
 
     const matchedTitle = matches[0].title_raw || matches[0].title_norm;
     sheet.getRange(row.rowNumber, columnIndex_('status')).setValue('notified');
-    sheet.getRange(row.rowNumber, columnIndex_('notified_at')).setValue(new Date().toISOString());
+    sheet.getRange(row.rowNumber, columnIndex_('notified_at')).setValue(now);
     sheet.getRange(row.rowNumber, columnIndex_('matched_title')).setValue(matchedTitle);
     sheet
       .getRange(row.rowNumber, columnIndex_('matched_screenings_json'))
       .setValue(JSON.stringify(matches.slice(0, CONFIG.MAX_SCREENINGS_IN_EMAIL)));
+    sheet.getRange(row.rowNumber, columnIndex_('reported_screening_keys')).setValue(JSON.stringify(matches.map(screeningKey_)));
   });
 }
 
@@ -135,7 +180,13 @@ function confirmAlert_(token) {
     sheet.getRange(row.rowNumber, columnIndex_('confirmed_at')).setValue(new Date().toISOString());
   }
 
-  return html_('Alert confirmed. You will get one email when this movie appears.');
+  const alertType = getAlertType_(row);
+  const formatFilter = getFormatFilter_(row);
+  if (alertType === 'persistent') {
+    return html_(`Alert confirmed. You will get emails when new${formatFilter === 'imax' ? ' IMAX' : ''} screenings appear until you cancel it.`);
+  }
+
+  return html_(`Alert confirmed. You will get one email when this movie${formatFilter === 'imax' ? ' has IMAX screenings' : ' appears'}.`);
 }
 
 function cancelAlert_(token) {
@@ -151,10 +202,14 @@ function cancelAlert_(token) {
   return html_('Alert cancelled.');
 }
 
-function findMatches_(queryNorm, screenings) {
+function findMatches_(queryNorm, screenings, formatFilter) {
   const byMovie = {};
 
   screenings.forEach((screening) => {
+    if (!matchesFormatFilter_(screening, formatFilter)) {
+      return;
+    }
+
     const titleNorm = normalizeTitle_(screening.title_norm || screening.title_raw || '');
     if (!titleNorm) {
       return;
@@ -180,18 +235,25 @@ function findMatches_(queryNorm, screenings) {
     .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
 }
 
-function sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken) {
+function sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken, alertType, formatFilter) {
   const baseUrl = getWebAppUrl_();
   const confirmUrl = `${baseUrl}?action=confirm&token=${encodeURIComponent(confirmToken)}`;
   const cancelUrl = `${baseUrl}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
   const subject = `Warsaw Cinemas Screenings Aggregator - Confirm your ${queryRaw} Movie Alert`;
+  const alertTypeLabel = formatAlertTypeLabel_(alertType);
+  const formatFilterLabel = formatFilterLabel_(formatFilter);
 
   const body = [
     'Warsaw Cinemas Screenings Aggregator',
     '',
     `Confirm your movie alert for: "${queryRaw}"`,
     '',
-    'We will send one email when this movie first appears in Warsaw cinemas.',
+    `Alert type: ${alertTypeLabel}`,
+    `Screenings: ${formatFilterLabel}`,
+    '',
+    alertType === 'persistent'
+      ? 'We will email you whenever new matching screenings appear, until you cancel the alert.'
+      : 'We will send one email when this movie first appears in Warsaw cinemas.',
     '',
     'Confirm alert:',
     confirmUrl,
@@ -204,24 +266,35 @@ function sendConfirmationEmail_(email, queryRaw, confirmToken, cancelToken) {
     to: email,
     subject,
     body,
-    htmlBody: buildConfirmationHtml_(queryRaw, confirmUrl, cancelUrl),
+    htmlBody: buildConfirmationHtml_(queryRaw, confirmUrl, cancelUrl, alertType, formatFilter),
   });
 }
 
-function sendMatchEmail_(email, queryRaw, matches, cancelToken) {
+function sendMatchEmail_(email, queryRaw, matches, cancelToken, options) {
+  const alertType = options && options.alertType ? options.alertType : 'one_time';
+  const formatFilter = options && options.formatFilter ? options.formatFilter : 'any';
   const cancelUrl = `${getWebAppUrl_()}?action=cancel&token=${encodeURIComponent(cancelToken)}`;
   const appUrl = buildAggregatorUrl_(queryRaw);
   const summary = buildMatchSummary_(matches);
-  const subject = `Warsaw Cinemas Screenings Aggregator - ${queryRaw} is now screening in Warsaw :)`;
+  const subject = alertType === 'persistent'
+    ? `Warsaw Cinemas Screenings Aggregator - new ${queryRaw} screenings in Warsaw :)`
+    : `Warsaw Cinemas Screenings Aggregator - ${queryRaw} is now screening in Warsaw :)`;
   const title = matches[0].title_raw || queryRaw;
   const lines = buildPlainTextMatchLines_(summary);
+  const openingLine = alertType === 'persistent'
+    ? `Good news. New${formatFilter === 'imax' ? ' IMAX' : ''} screenings matched your "${queryRaw}" alert.`
+    : `Good news. "${queryRaw}" is now screening in Warsaw.`;
+  const screeningLabel = alertType === 'persistent' ? 'new screenings' : 'screenings';
+  const footerLine = alertType === 'persistent'
+    ? 'This is a persistent alert. You will only receive future emails when new matching screenings appear.'
+    : 'This was a one-time alert, so you will not receive more emails for it.';
 
   const body = [
     'Warsaw Cinemas Screenings Aggregator',
     '',
-    `Good news. "${queryRaw}" is now screening in Warsaw.`,
+    openingLine,
     '',
-    `Found ${summary.totalScreenings} screenings across ${summary.totalCinemas} cinemas and ${summary.totalDays} days.`,
+    `Found ${summary.totalScreenings} ${screeningLabel} across ${summary.totalCinemas} cinemas and ${summary.totalDays} days.`,
     `Earliest screening: ${formatDateTimeText_(summary.earliest.starts_at)}.`,
     '',
     'Earliest days:',
@@ -229,7 +302,7 @@ function sendMatchEmail_(email, queryRaw, matches, cancelToken) {
     '',
     `Open all matching screenings: ${appUrl}`,
     '',
-    'This was a one-time alert, so you will not receive more emails for it.',
+    footerLine,
     `Cancel link: ${cancelUrl}`,
   ].join('\n');
 
@@ -237,44 +310,60 @@ function sendMatchEmail_(email, queryRaw, matches, cancelToken) {
     to: email,
     subject,
     body,
-    htmlBody: buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl),
+    htmlBody: buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl, alertType, formatFilter),
   });
 }
 
-function buildConfirmationHtml_(queryRaw, confirmUrl, cancelUrl) {
+function buildConfirmationHtml_(queryRaw, confirmUrl, cancelUrl, alertType, formatFilter) {
+  const alertTypeLabel = formatAlertTypeLabel_(alertType);
+  const formatFilterLabel = formatFilterLabel_(formatFilter);
+  const explanation = alertType === 'persistent'
+    ? 'We will email you whenever new matching screenings appear, until you cancel the alert.'
+    : 'We will send one email when this movie first appears in Warsaw cinemas.';
+
   return emailShell_(`
     <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#f8fafc;">Confirm your movie alert</h1>
     <p style="margin:0 0 18px;color:#cbd5e1;font-size:15px;line-height:1.6;">
-      We will send one email when this movie first appears in Warsaw cinemas.
+      ${escapeHtml_(explanation)}
     </p>
     <div style="margin:0 0 22px;padding:16px;border:1px solid rgba(255,255,255,0.12);border-radius:12px;background:#0f172a;">
       <div style="font-size:13px;color:#94a3b8;margin-bottom:6px;">Movie alert</div>
       <div style="font-size:22px;font-weight:700;color:#f8fafc;">${escapeHtml_(queryRaw)}</div>
+      <div style="margin-top:10px;color:#cbd5e1;font-size:14px;line-height:1.5;">
+        ${escapeHtml_(alertTypeLabel)} · ${escapeHtml_(formatFilterLabel)}
+      </div>
     </div>
     ${buttonHtml_(confirmUrl, 'Confirm alert')}
     <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">
-      No account needed. This is a one-time notification. If this was not you, you can ignore this email
+      No account needed. If this was not you, you can ignore this email
       or <a href="${cancelUrl}" style="color:#67e8f9;">cancel the alert</a>.
     </p>
   `);
 }
 
-function buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl) {
+function buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl, alertType, formatFilter) {
   const posterHtml = summary.posterUrl
     ? `<td style="width:96px;padding:0 18px 18px 0;vertical-align:top;">
          <img src="${summary.posterUrl}" alt="${escapeHtml_(title)} poster" width="96" style="display:block;width:96px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);">
        </td>`
     : '';
   const dayHtml = summary.days.map(buildDayHtml_).join('');
+  const headline = alertType === 'persistent'
+    ? `New${formatFilter === 'imax' ? ' IMAX' : ''} screenings for "${queryRaw}"`
+    : `Good news - "${queryRaw}" is screening.`;
+  const footerLine = alertType === 'persistent'
+    ? 'This is a persistent alert. Future emails will include only newly detected matching screenings.'
+    : 'This was a one-time alert, so you will not receive more emails for it.';
+  const screeningLabel = alertType === 'persistent' ? 'new screenings' : 'screenings';
 
   return emailShell_(`
-    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#f8fafc;">Good news - "${escapeHtml_(queryRaw)}" is screening.</h1>
+    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.25;color:#f8fafc;">${escapeHtml_(headline)}</h1>
     <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:0 0 18px;">
       <tr>
         ${posterHtml}
         <td style="vertical-align:top;padding:0 0 18px;">
           <p style="margin:0 0 8px;color:#cbd5e1;font-size:15px;line-height:1.6;">
-            Found <strong style="color:#f8fafc;">${summary.totalScreenings}</strong> screenings across
+            Found <strong style="color:#f8fafc;">${summary.totalScreenings}</strong> ${escapeHtml_(screeningLabel)} across
             <strong style="color:#f8fafc;">${summary.totalCinemas}</strong> cinemas and
             <strong style="color:#f8fafc;">${summary.totalDays}</strong> days.
           </p>
@@ -288,7 +377,7 @@ function buildMatchHtml_(queryRaw, title, summary, appUrl, cancelUrl) {
     ${dayHtml}
     ${buttonHtml_(appUrl, 'View all matching screenings')}
     <p style="margin:22px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">
-      This was a one-time alert, so you will not receive more emails for it.
+      ${escapeHtml_(footerLine)}
       <a href="${cancelUrl}" style="color:#67e8f9;">Cancel alert</a>
     </p>
   `);
@@ -411,6 +500,89 @@ function buttonHtml_(url, label) {
   return `<a href="${url}" style="display:inline-block;background:#8b5cf6;color:#ffffff;text-decoration:none;border-radius:999px;padding:12px 18px;font-weight:800;font-size:14px;">${escapeHtml_(label)}</a>`;
 }
 
+function getAlertType_(row) {
+  return normalizeAlertType_(row.alert_type || 'one_time');
+}
+
+function getFormatFilter_(row) {
+  return normalizeFormatFilter_(row.format_filter || 'any');
+}
+
+function normalizeAlertType_(value) {
+  const normalized = normalizeFieldName_(value);
+  if (
+    normalized.includes('persistent')
+    || normalized.includes('forever')
+    || normalized.includes('manual')
+    || normalized.includes('until cancel')
+    || normalized.includes('new screenings')
+    || normalized.includes('nowe seanse')
+    || normalized.includes('stale')
+  ) {
+    return 'persistent';
+  }
+  return 'one_time';
+}
+
+function normalizeFormatFilter_(value) {
+  const normalized = normalizeFieldName_(value);
+  if (normalized.includes('imax')) {
+    return 'imax';
+  }
+  return 'any';
+}
+
+function formatAlertTypeLabel_(alertType) {
+  return alertType === 'persistent' ? 'Persistent alert' : 'One-time alert';
+}
+
+function formatFilterLabel_(formatFilter) {
+  return formatFilter === 'imax' ? 'IMAX screenings only' : 'Any screening format';
+}
+
+function matchesFormatFilter_(screening, formatFilter) {
+  if (formatFilter !== 'imax') {
+    return true;
+  }
+
+  const values = []
+    .concat(screening.tags || [])
+    .concat([
+      screening.format,
+      screening.cinema_name,
+      screening.title_raw,
+      screening.title_norm,
+    ])
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return values.some((value) => value.includes('imax'));
+}
+
+function screeningKey_(screening) {
+  const tags = Array.isArray(screening.tags) ? screening.tags.slice().sort().join(',') : '';
+  return [
+    screening.cinema_id || '',
+    screening.cinema_name || '',
+    normalizeTitle_(screening.title_norm || screening.title_raw || ''),
+    screening.starts_at || '',
+    tags,
+  ].join('|');
+}
+
+function parseJsonArray_(value) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed.filter(Boolean).map(String) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
 function buildAggregatorUrl_(queryRaw) {
   return `${CONFIG.SITE_URL}?q=${encodeURIComponent(queryRaw)}&all=1`;
 }
@@ -476,6 +648,8 @@ function getFormValues_(e) {
 
   let email = '';
   let query = '';
+  let alertType = 'one_time';
+  let formatFilter = 'any';
 
   const emailEntry = entries.find((entry) =>
     entry.keyNorm.includes('email')
@@ -517,9 +691,31 @@ function getFormValues_(e) {
     }
   }
 
+  const alertTypeEntry = entries.find((entry) =>
+    entry.keyNorm.includes('alert type')
+    || entry.keyNorm.includes('notification type')
+    || entry.keyNorm.includes('typ alertu')
+    || entry.keyNorm.includes('rodzaj alertu')
+  );
+  if (alertTypeEntry) {
+    alertType = normalizeAlertType_(alertTypeEntry.value);
+  }
+
+  const formatFilterEntry = entries.find((entry) =>
+    entry.keyNorm.includes('format')
+    || entry.keyNorm.includes('imax')
+    || entry.keyNorm.includes('screening type')
+    || entry.keyNorm.includes('typ seansu')
+  );
+  if (formatFilterEntry) {
+    formatFilter = normalizeFormatFilter_(formatFilterEntry.value);
+  }
+
   return {
     email,
     query,
+    alertType,
+    formatFilter,
   };
 }
 
