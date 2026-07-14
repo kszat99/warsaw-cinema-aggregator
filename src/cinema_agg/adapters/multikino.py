@@ -35,13 +35,7 @@ class MultikinoAdapter(BaseAdapter):
             "Referer": f"{self.base_url}/teraz-gramy",
         }
         
-        if CurlAsyncSession is None:
-            main_url = f"{self.base_url}/teraz-gramy"
-            try:
-                # First get cookies from the main page if needed.
-                await client.get(main_url, headers=headers)
-            except Exception as e:
-                print(f"  - Warning: Multikino preflight failed for {self.cinema_name}: {type(e).__name__}: {e}", flush=True)
+        main_url = f"{self.base_url}/teraz-gramy"
             
         # 2. Query the showing groups API
         api_url = f"https://www.multikino.pl/api/microservice/showings/cinemas/{self.cinema_id}/films"
@@ -58,7 +52,7 @@ class MultikinoAdapter(BaseAdapter):
         
         try:
             request_url, request_params = self._build_request_url(api_url, params)
-            resp = await self._get(request_url, client, params=request_params, headers=headers)
+            resp = await self._get(request_url, client, params=request_params, headers=headers, preflight_url=main_url)
             
             if resp.status_code != 200:
                 body = resp.text[:200].replace("\n", " ").replace("\r", " ")
@@ -140,11 +134,21 @@ class MultikinoAdapter(BaseAdapter):
                     
         return screenings
 
-    async def _get(self, url: str, client: httpx.AsyncClient, **kwargs):
+    async def _get(self, url: str, client: httpx.AsyncClient, preflight_url: str = None, **kwargs):
         if CurlAsyncSession is None:
+            if preflight_url:
+                try:
+                    await client.get(preflight_url, headers=kwargs.get("headers"))
+                except Exception as e:
+                    print(f"  - Warning: Multikino preflight failed: {type(e).__name__}: {e}", flush=True)
             return await client.get(url, **kwargs)
 
         async with CurlAsyncSession(impersonate="chrome120", timeout=30) as session:
+            if preflight_url:
+                try:
+                    await session.get(preflight_url, headers=kwargs.get("headers"))
+                except Exception as e:
+                    print(f"  - Warning: Multikino preflight failed: {type(e).__name__}: {e}", flush=True)
             return await session.get(url, **kwargs)
 
     def _build_request_url(self, api_url: str, params: dict):
