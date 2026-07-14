@@ -99,6 +99,60 @@ def clean_title_for_search(title: str) -> str:
     return title.strip()
 
 
+def clean_title_search_candidates(title: str) -> List[str]:
+    """Return best-effort poster search candidates from noisy event titles."""
+    if not title:
+        return []
+
+    original = html.unescape(title).strip()
+    candidates = []
+
+    def add(value: str) -> None:
+        value = re.sub(r"\s+", " ", value).strip(" -:|")
+        if value and value not in candidates:
+            candidates.append(value)
+
+    without_years = re.sub(r"\(\s*(19|20)\d{2}\s*\)", "", original)
+    without_brackets = re.sub(r"\[.*?\]", "", without_years)
+
+    event_prefix_patterns = [
+        r"^kino letnie\s*\d{4}\s*:\s*",
+        r"^lato w mieście\s*\d{4}\s*:\s*",
+        r"^lato w miescie\s*\d{4}\s*:\s*",
+        r"^lot kino letnie\s*:\s*",
+        r"^wsp\s*:\s*",
+        r"^wajda\s*:\s*re-wizje\s*:\s*",
+        r"^pora dla seniora\s*:\s*",
+        r"^kultowe klasyki\s*:\s*",
+        r"^filmowe poranki\s*:\s*",
+        r"^maraton\s*:\s*",
+        r"^dkf\s*:\s*",
+        r"^kino seniora\s*:\s*",
+        r"^seans\s*:\s*",
+        r"^przedpremiera\s*:\s*",
+        r"^pokaz\s*:\s*",
+    ]
+
+    stripped = without_brackets
+    for pattern in event_prefix_patterns:
+        stripped = re.sub(pattern, "", stripped, flags=re.IGNORECASE)
+
+    add(stripped)
+    add(clean_title_for_search(stripped))
+
+    # Keep the subtitle for known title forms like "Rambo - pierwsza krew".
+    if " - " in stripped:
+        add(stripped)
+        add(re.sub(r"\s+-\s+(napisy|dubbing|lektor|przedpremiera).*$", "", stripped, flags=re.IGNORECASE))
+
+    # Sometimes cinemas add useful English titles after a slash.
+    for part in re.split(r"\s*/\s*", stripped):
+        add(part)
+        add(clean_title_for_search(part))
+
+    return candidates
+
+
 def extract_language_and_tags(title_raw: str, format_raw: str = "") -> Tuple[str, List[str]]:
     """
     Extract language (nap/dub/voiceover/org/ua) and tags (3D, etc.)

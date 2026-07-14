@@ -10,6 +10,7 @@ on:
       - app.js
       - dist/showtimes.json
       - dist/poster_cache.json
+      - dist/cinema_health.json
       - .github/workflows/deploy_committed_data.yml
   workflow_dispatch:
 
@@ -38,6 +39,7 @@ jobs:
           mkdir -p site/dist
           cp index.html styles.css app.js site/
           cp dist/showtimes.json site/dist/
+          if [ -f dist/cinema_health.json ]; then cp dist/cinema_health.json site/dist/; fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v6
@@ -50,3 +52,29 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Fail if cinema health alerts are active
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          health_path = Path("dist/cinema_health.json")
+          if not health_path.exists():
+              print("No cinema health file found; skipping alert check.")
+              raise SystemExit(0)
+
+          health = json.loads(health_path.read_text(encoding="utf-8"))
+          alerts = health.get("alerts", [])
+          if not alerts:
+              print("Cinema health OK.")
+              raise SystemExit(0)
+
+          print("Cinema health alerts:")
+          for alert in alerts:
+              print(
+                  f"- {alert.get('scope')}: {alert.get('name')} "
+                  f"returned 0 screenings for {alert.get('zero_streak')} consecutive builds"
+              )
+          raise SystemExit(1)
+          PY

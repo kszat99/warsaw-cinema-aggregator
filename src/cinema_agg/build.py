@@ -19,7 +19,7 @@ from .adapters.iluzjon import IluzjonAdapter
 from .adapters.amondo import AmondoAdapter
 from .adapters.ujazdowski import UjazdowskiAdapter
 from .models import BuildOutput, Screening
-from .normalize import clean_title_for_search
+from .normalize import clean_title_for_search, clean_title_search_candidates
 
 import httpx
 from typing import List, Optional
@@ -70,42 +70,111 @@ class PosterService:
         if title_norm in self.cache:
             return self.cache[title_norm]
         
-        search_title = clean_title_for_search(title_raw)
-        print(f"  - Searching poster for: '{search_title}' (from '{title_raw}')")
+        search_titles = clean_title_search_candidates(title_raw) or [clean_title_for_search(title_raw)]
+        print(f"  - Searching poster for: '{search_titles[0]}' (from '{title_raw}')")
         
         try:
             async with httpx.AsyncClient() as client:
-                params = {
-                    "api_key": self.api_key,
-                    "query": search_title,
-                    "include_adult": "false",
-                    "page": 1,
-                    "language": "pl-PL" # Try Polish first
-                }
-                r = await client.get("https://api.themoviedb.org/3/search/movie", params=params, timeout=10)
-                r.raise_for_status()
-                results = r.json().get("results", [])
-                
-                # If no results or first result has no poster, try Global
-                if not results or not results[0].get("poster_path"):
-                    if "language" in params:
-                        params.pop("language")
-                    r = await client.get("https://api.themoviedb.org/3/search/movie", params=params, timeout=10)
-                    r.raise_for_status()
-                    results = r.json().get("results", [])
+                for search_title in search_titles:
+                    for language in ("pl-PL", None):
+                        params = {
+                            "api_key": self.api_key,
+                            "query": search_title,
+                            "include_adult": "false",
+                            "page": 1,
+                        }
+                        if language:
+                            params["language"] = language
 
-                if results:
-                    p = results[0].get("poster_path")
-                    if p:
-                        url = f"https://image.tmdb.org/t/p/w185{p}"
-                        self.cache[title_norm] = url
-                        return url
+                        r = await client.get("https://api.themoviedb.org/3/search/movie", params=params, timeout=10)
+                        r.raise_for_status()
+                        results = r.json().get("results", [])
+
+                        for result in results[:3]:
+                            p = result.get("poster_path")
+                            if p:
+                                url = f"https://image.tmdb.org/t/p/w185{p}"
+                                self.cache[title_norm] = url
+                                if search_title != search_titles[0]:
+                                    print(f"    - Poster found with fallback search: '{search_title}'")
+                                return url
         except Exception as e:
-            print(f"Error fetching poster for {search_title}: {e}")
+            print(f"Error fetching poster for {search_titles[0]}: {e}")
         
         # NOTE: We do NOT save 'None' to self.cache permanently anymore.
         # This ensures we retry missing posters on every build.
         return None
+
+
+def update_cinema_health(cinema_screening_counts: dict, generated_at: datetime) -> dict:
+    health_path = Path("dist/cinema_health.json")
+    previous = {}
+    if health_path.exists():
+        try:
+            with open(health_path, "r", encoding="utf-8") as f:
+                previous = json.load(f)
+        except Exception:
+            previous = {}
+
+    previous_cinemas = previous.get("cinemas", {})
+    previous_adapters = previous.get("adapters", {})
+    cinemas = {}
+    adapters = {}
+    alerts = []
+
+    for cinema in CINEMAS:
+        count = int(cinema_screening_counts.get(cinema.id, 0))
+        previous_streak = int(previous_cinemas.get(cinema.id, {}).get("zero_streak", 0) or 0)
+        zero_streak = previous_streak + 1 if count == 0 else 0
+        cinemas[cinema.id] = {
+            "name": cinema.name,
+            "adapter": cinema.adapter,
+            "screenings": count,
+            "zero_streak": zero_streak,
+        }
+        if zero_streak >= 3:
+            alerts.append({
+                "scope": "cinema",
+                "id": cinema.id,
+                "name": cinema.name,
+                "adapter": cinema.adapter,
+                "zero_streak": zero_streak,
+            })
+
+    for adapter in sorted({cinema.adapter for cinema in CINEMAS}):
+        adapter_cinemas = [cinema for cinema in CINEMAS if cinema.adapter == adapter]
+        count = sum(int(cinema_screening_counts.get(cinema.id, 0)) for cinema in adapter_cinemas)
+        previous_streak = int(previous_adapters.get(adapter, {}).get("zero_streak", 0) or 0)
+        zero_streak = previous_streak + 1 if count == 0 else 0
+        adapters[adapter] = {
+            "screenings": count,
+            "cinemas": [cinema.id for cinema in adapter_cinemas],
+            "zero_streak": zero_streak,
+        }
+        if zero_streak >= 3:
+            alerts.append({
+                "scope": "adapter",
+                "id": adapter,
+                "name": adapter,
+                "zero_streak": zero_streak,
+            })
+
+    health = {
+        "generated_at": generated_at.isoformat(),
+        "threshold_days": 3,
+        "alerts": alerts,
+        "cinemas": cinemas,
+        "adapters": adapters,
+    }
+
+    health_path.parent.mkdir(exist_ok=True)
+    with open(health_path, "w", encoding="utf-8") as f:
+        json.dump(health, f, indent=2, ensure_ascii=False)
+
+    if alerts:
+        print(f"Health check warnings: {len(alerts)} zero-screening streaks reached threshold.", flush=True)
+
+    return health
 
 async def fetch_screenings_for_cinema(adapter, cinema_cfg, date_range, client) -> List[Screening]:
     if cinema_cfg.adapter != "multikino":
@@ -256,8 +325,9 @@ async def run_build():
     # Sort by time
     unique_screenings.sort(key=lambda s: s.starts_at)
     
+    generated_at = datetime.now()
     output = BuildOutput(
-        generated_at=datetime.now(),
+        generated_at=generated_at,
         screenings=unique_screenings
     )
     
@@ -269,8 +339,12 @@ async def run_build():
     with open(output_path, "w", encoding="utf-8") as f:
         json_data = output.model_dump_json(indent=2)
         f.write(json_data)
+
+    health = update_cinema_health(cinema_screening_counts, generated_at)
         
     print(f"Build complete! Saved {len(unique_screenings)} screenings to {output_path}")
+    if health["alerts"]:
+        print("Health alerts will be reported by the deploy workflow if committed.", flush=True)
 
 if __name__ == "__main__":
     asyncio.run(run_build())

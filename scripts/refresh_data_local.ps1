@@ -55,7 +55,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Aggregator build failed with exit code $LASTEXITCODE"
 }
 
-& $git add -f dist/showtimes.json dist/poster_cache.json
+& $git add -f dist/showtimes.json dist/poster_cache.json dist/cinema_health.json
 
 $changes = & $git diff --cached --name-only
 if (-not $changes) {
