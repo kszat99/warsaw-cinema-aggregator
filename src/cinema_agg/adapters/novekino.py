@@ -23,7 +23,7 @@ class NovekinoAdapter(BaseAdapter):
         items = soup.find_all('div', class_='movies-movie')
         
         for item in items:
-            title_node = item.find('h2', class_='movies-movie__single__title')
+            title_node = item.find(['h2', 'h3'], class_='movies-movie__single__title')
             if not title_node:
                 continue
             
@@ -73,7 +73,10 @@ class NovekinoAdapter(BaseAdapter):
 
                 # Extract poster URL
                 poster_url = None
-                img_node = item.find('div', class_='movies-movie__single__img')
+                img_node = (
+                    item.find('div', class_='movies-movie__single__img')
+                    or item.find('div', class_='movies-movie__single__poster')
+                )
                 if img_node:
                     img_node = img_node.find('img')
                 if img_node:

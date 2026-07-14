@@ -1,6 +1,6 @@
 /**
  * Warsaw Cinema Aggregator
- * Frontend Logic v3.0 – Horizontal Screenings
+ * Frontend Logic v3.0 - Horizontal Screenings
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -12,13 +12,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dateScrollLeft = document.getElementById('date-scroll-left');
     const dateScrollRight = document.getElementById('date-scroll-right');
 
-    const DAY_NAMES = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb'];
+    const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const LANG_LABELS = {
-        'nap': 'Napisy',
+        'nap': 'Subtitles',
         'dub': 'Dubbing',
-        'voiceover': 'Lektor',
-        'org': 'Oryginał',
-        'ua': 'UA 🇺🇦'
+        'voiceover': 'Voice-over',
+        'org': 'Original',
+        'ua': 'UA'
     };
 
     let allScreenings = [];
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         initApp();
     } catch (err) {
         console.error(err);
-        moviesGrid.innerHTML = `<div class="empty-state">Błąd ładowania danych: ${err.message}.<br>Upewnij się, że uruchomiłeś builder.</div>`;
+        moviesGrid.innerHTML = `<div class="empty-state">Error loading data: ${err.message}.<br>Make sure the data builder has run.</div>`;
     }
 
     function initApp() {
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderDateSelector(dates) {
         dateSelector.innerHTML = '';
-        const dayNames = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
+        const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
         dates.forEach(dateStr => {
             const dateObj = new Date(dateStr);
@@ -177,7 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         searchContainer.className = 'cinema-search-container';
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
-        searchInput.placeholder = 'Szukaj kina...';
+        searchInput.placeholder = 'Search cinema...';
         searchInput.className = 'cinema-search-input';
         searchInput.autocomplete = 'off';
         
@@ -196,7 +196,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Add "Select/Deselect All" Toggle
         const allToggle = document.createElement('div');
         allToggle.className = 'cinema-item all-toggle';
-        allToggle.innerHTML = `<span>Wsz. / Żadne (widoczne)</span>`;
+        allToggle.innerHTML = `<span>All / none visible</span>`;
         allToggle.addEventListener('click', (e) => {
             e.stopPropagation();
             
@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const textSpan = toggle.querySelector('.toggle-text');
 
         if (state.selectedCinemas.length === 0) {
-            textSpan.textContent = 'Wszystkie kina';
+            textSpan.textContent = 'All cinemas';
         } else {
             const names = state.selectedCinemas
                 .map(id => cinemasMap.get(id))
@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderMovies(movies) {
         if (movies.length === 0) {
-            moviesGrid.innerHTML = '<div class="empty-state">Brak seansów pasujących do filtrów. Spróbuj zmienić datę lub kino.</div>';
+            moviesGrid.innerHTML = '<div class="empty-state">No showtimes match the current filters. Try changing the date or cinema.</div>';
             return;
         }
 
@@ -359,9 +359,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             scrollerWrapper.className = 'screenings-scroller-wrapper';
 
             scrollerWrapper.innerHTML = `
-                <button class="screenings-nav-btn nav-left" aria-label="Przewiń seanse w lewo">◀</button>
+                <button class="screenings-nav-btn nav-left" aria-label="Scroll showtimes left">◀</button>
                 <div class="screenings-list"></div>
-                <button class="screenings-nav-btn nav-right" aria-label="Przewiń seanse w prawo">▶</button>
+                <button class="screenings-nav-btn nav-right" aria-label="Scroll showtimes right">▶</button>
             `;
 
             const screeningsList = scrollerWrapper.querySelector('.screenings-list');
@@ -379,7 +379,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderMoviesAllDays(movies) {
         if (movies.length === 0) {
-            moviesGrid.innerHTML = '<div class="empty-state">Brak seansów pasujących do filtrów. Spróbuj zmienić datę lub kino.</div>';
+            moviesGrid.innerHTML = '<div class="empty-state">No showtimes match the current filters. Try changing the date or cinema.</div>';
             return;
         }
 
@@ -418,9 +418,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 scrollerWrapper.className = 'screenings-scroller-wrapper';
 
                 scrollerWrapper.innerHTML = `
-                    <button class="screenings-nav-btn nav-left" aria-label="Przewiń seanse w lewo">◀</button>
+                    <button class="screenings-nav-btn nav-left" aria-label="Scroll showtimes left">◀</button>
                     <div class="screenings-list"></div>
-                    <button class="screenings-nav-btn nav-right" aria-label="Przewiń seanse w prawo">▶</button>
+                    <button class="screenings-nav-btn nav-right" aria-label="Scroll showtimes right">▶</button>
                 `;
 
                 const screeningsList = scrollerWrapper.querySelector('.screenings-list');
@@ -477,8 +477,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         card.innerHTML = `
             <div class="poster-column">
-                ${movie.poster_url ? `<img src="${movie.poster_url}" alt="${movie.title}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'poster-fallback\\'>Brak plakatu</div>'">` :
-                `<div class="poster-fallback">Brak plakatu</div>`}
+                ${movie.poster_url ? `<img src="${movie.poster_url}" alt="${movie.title}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'poster-fallback\\'>No poster</div>'">` :
+                `<div class="poster-fallback">No poster</div>`}
             </div>
             <div class="content-column">
                 <div class="movie-header-info">
