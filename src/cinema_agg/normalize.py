@@ -32,6 +32,10 @@ def normalize_title(title: str) -> str:
 
     title = re.sub(r"\s*&\s*", " i ", title)
     title = re.sub(r"\band\b", "i", title)
+    # Treat punctuation used between words as a separator. Removing it outright
+    # would make equivalent titles diverge, e.g. "Arek.Mama" -> "arekmama"
+    # while "Arek. Mama" -> "arek mama".
+    title = re.sub(r"[.:;,/\\|_\-]+", " ", title)
     title = re.sub(r"[^\w\s]", "", title)
     title = re.sub(r"\s+", " ", title).strip()
 

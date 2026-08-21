@@ -4,6 +4,7 @@ from datetime import date
 import httpx
 
 from src.cinema_agg.adapters.novekino import NovekinoAdapter
+from src.cinema_agg.normalize import normalize_title
 
 
 class FakeClient:
@@ -58,6 +59,18 @@ class NovekinoAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(screenings), 1)
         self.assertEqual(screenings[0].starts_at.isoformat(), "2026-08-21T18:00:00")
+
+
+class NormalizeTitleTests(unittest.TestCase):
+    def test_periods_with_or_without_following_spaces_group_together(self):
+        self.assertEqual(
+            normalize_title("Arek. Mama. Panorama"),
+            normalize_title("Arek.Mama.Panorama"),
+        )
+        self.assertEqual(normalize_title("Arek.Mama.Panorama"), "arek mama panorama")
+
+    def test_hyphenated_and_spaced_title_group_together(self):
+        self.assertEqual(normalize_title("Spider-Man"), normalize_title("Spider Man"))
 
 
 if __name__ == "__main__":
