@@ -35,13 +35,20 @@ $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -ExecutionTimeLimit (New-TimeSpan -Hours 4)
 
+$principal = New-ScheduledTaskPrincipal `
+    -UserId $env:USERNAME `
+    -LogonType Interactive `
+    -RunLevel Limited
+
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $action `
     -Trigger $triggers `
     -Settings $settings `
+    -Principal $principal `
     -Description "Builds Warsaw cinema data locally, commits dist/showtimes.json, and pushes it for GitHub Pages deploy." `
-    -Force
+    -Force `
+    -ErrorAction Stop
 
 $triggerDescription = @()
 if ($Daily) {

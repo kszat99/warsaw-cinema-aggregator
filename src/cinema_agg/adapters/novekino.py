@@ -46,10 +46,21 @@ class NovekinoAdapter(BaseAdapter):
                     format_raw = version_li.text.replace('wersja:', '').strip()
             
             # Times are in <ul class="movies-movie__single__options__hours">
-            hour_links = item.find_all('a', class_='js-repo-popup')
+            # MSI 1.8.72.2 renamed showtime links from js-repo-popup to
+            # js-link-popup. Keep both selectors because the same adapter is
+            # also used by Novekino sites that may still serve the old markup.
+            hour_links = item.select('a.js-repo-popup, a.js-link-popup')
+            seen_showtimes = set()
             
             for hl in hour_links:
                 time_str = hl.text.strip()
+                # MSI renders separate desktop/mobile controls for the same
+                # event. Do not emit the duplicated screening.
+                showtime_key = (time_str, hl.get('data-event'), hl.get('href'))
+                if showtime_key in seen_showtimes:
+                    continue
+                seen_showtimes.add(showtime_key)
+
                 # Example time: "18:00"
                 try:
                     hour, minute = map(int, time_str.split(':'))

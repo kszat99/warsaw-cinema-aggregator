@@ -28,6 +28,7 @@ inspect_*.py
 debug_*.py
 read_log.py
 test_*.py
+!tests/test_*.py
 parse_*.py
 clear_*.py
 
