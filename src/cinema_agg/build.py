@@ -18,6 +18,7 @@ from .adapters.helios import HeliosAdapter
 from .adapters.iluzjon import IluzjonAdapter
 from .adapters.amondo import AmondoAdapter
 from .adapters.ujazdowski import UjazdowskiAdapter
+from .adapters.kultura import KulturaAdapter
 from .models import BuildOutput, Screening
 from .normalize import clean_title_for_search, clean_title_search_candidates
 
@@ -42,6 +43,7 @@ ADAPTER_MAP = {
     "iluzjon": IluzjonAdapter,
     "amondo": AmondoAdapter,
     "ujazdowski": UjazdowskiAdapter,
+    "kultura": KulturaAdapter,
 }
 
 # Fix for Windows console encoding

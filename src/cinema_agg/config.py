@@ -124,8 +124,8 @@ CINEMAS = [
     Cinema(
         id="kultura",
         name="Kino Kultura",
-        url="https://rezerwacja.kinokultura.pl/MSI/mvc/pl",
-        adapter="novekino"
+        url="https://www.kinokultura.pl/",
+        adapter="kultura"
     ),
     Cinema(
         id="amondo",
