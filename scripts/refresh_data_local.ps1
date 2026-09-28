@@ -7,6 +7,28 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Existing tasks can retain their original launcher path. A machine-local
+# route delegates to the stable checkout before importing any application code.
+$routePath = Join-Path $StateDir "live_checkout.txt"
+if (Test-Path -LiteralPath $routePath) {
+    $liveRoot = (Get-Content -LiteralPath $routePath -Raw).Trim()
+    $resolvedLive = (Resolve-Path -LiteralPath $liveRoot).Path
+    $resolvedRequested = (Resolve-Path -LiteralPath $RepoRoot).Path
+    if ($resolvedLive -ne $resolvedRequested) {
+        $liveScript = Join-Path $resolvedLive "scripts\refresh_data_local.ps1"
+        if (-not (Test-Path -LiteralPath $liveScript)) { throw "Live refresh script not found: $liveScript" }
+        Write-Host "Delegating scheduled refresh to live checkout: $resolvedLive"
+        $launchArgs = @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", $liveScript,
+            "-RepoRoot", $resolvedLive, "-Branch", $Branch, "-StateDir", $StateDir)
+        if ($Force) { $launchArgs += "-Force" }
+        if ($PythonExecutable) { $launchArgs += @("-PythonExecutable", $PythonExecutable) }
+        $ErrorActionPreference = "Continue"
+        & powershell.exe @launchArgs
+        exit $LASTEXITCODE
+    }
+}
+
 Set-Location -LiteralPath $RepoRoot
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 

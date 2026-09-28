@@ -78,6 +78,25 @@ class LocalRefreshTests(unittest.TestCase):
         self.assert_failed(self.run_refresh())
         self.assertIn('user-work.txt', self.git('diff', '--cached', '--name-only'))
 
+    def test_original_launcher_routes_to_live_checkout(self):
+        (self.repo / 'scripts').mkdir()
+        shutil.copyfile(SCRIPT, self.repo / 'scripts/refresh_data_local.ps1')
+        self.git('add', 'scripts')
+        self.git('commit', '-m', 'live launcher')
+        self.state.mkdir()
+        (self.state / 'live_checkout.txt').write_text(str(self.repo), encoding='utf-8')
+        development = self.root / 'development'
+        development.mkdir()
+        result = subprocess.run([
+            'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', str(SCRIPT), '-RepoRoot', str(development),
+            '-StateDir', str(self.state), '-PythonExecutable', str(self.fake_python), '-Force',
+        ], capture_output=True, text=True, timeout=40)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Delegating scheduled refresh', result.stdout)
+        self.assertTrue((self.state / 'last_success_date.txt').exists())
+        self.assertEqual(list(development.iterdir()), [])
+
     def test_failed_push_can_retry_without_new_data(self):
         hook = self.remote / 'hooks/pre-receive'
         hook.write_text('#!/bin/sh\nexit 1\n', encoding='ascii')

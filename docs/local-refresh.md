@@ -4,6 +4,8 @@ The live scheduled job must use a dedicated checkout of `main`, with its own `.v
 
 The development checkout can use `codex/server-app` independently. Neither its uncommitted edits nor its Python dependency changes should enter the daily publisher.
 
+When Windows denies permission to edit an existing task definition, the compatible launcher reads `%LOCALAPPDATA%\WarsawCinemaAggregator\live_checkout.txt` and delegates to the checkout recorded there. Keep this launcher behavior in the development branch. A future administrator can point the task directly at the live script; application code and dependencies already run from the live checkout either way.
+
 `scripts/refresh_data_local.ps1` saves transcripts under `%LOCALAPPDATA%\WarsawCinemaAggregator\logs`, prevents overlapping invocations, verifies the branch and refuses staged/uncommitted source changes. Only the three generated `dist/` data files are committed. Native command exit codes determine failure; harmless stderr is logged.
 
 The success-date marker is updated only after a successful push. If the push failed after a commit, another run retries publication even if the generated data is unchanged. The script fast-forwards from `origin/main`; divergence or conflicts stop with a logged error rather than overwriting work.
