@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -48,7 +49,7 @@ class LocalRefreshTests(unittest.TestCase):
             '-File', str(SCRIPT), '-RepoRoot', str(self.repo),
             '-StateDir', str(self.state), '-PythonExecutable', str(self.fake_python),
             '-Force',
-        ], capture_output=True, text=True, timeout=40)
+        ], capture_output=True, encoding='utf-8', timeout=40)
 
     def assert_failed(self, result):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -66,6 +67,16 @@ class LocalRefreshTests(unittest.TestCase):
         self.fake_python.write_text('@echo off\necho build failed 1>&2\nexit /b 7\n')
         self.assert_failed(self.run_refresh())
         self.assertEqual(before, self.git('rev-parse', 'HEAD'))
+
+    def test_polish_output_is_preserved_in_transcript(self):
+        self.fake_python.write_text(
+            '@echo off\n"' + sys.executable + '" -c "print(chr(321)+chr(243)+chr(100)+chr(378))"\n'
+            '>dist\\showtimes.json echo {"test":true}\nexit /b 0\n', encoding='ascii'
+        )
+        result = self.run_refresh()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        logs = list((self.state / 'logs').glob('*.log'))
+        self.assertIn('\u0141\u00f3d\u017a', logs[0].read_text(encoding='utf-8-sig'))
 
     def test_development_branch_is_rejected(self):
         self.git('switch', '-c', 'codex/server-app')
@@ -91,7 +102,7 @@ class LocalRefreshTests(unittest.TestCase):
             'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
             '-File', str(SCRIPT), '-RepoRoot', str(development),
             '-StateDir', str(self.state), '-PythonExecutable', str(self.fake_python), '-Force',
-        ], capture_output=True, text=True, timeout=40)
+        ], capture_output=True, encoding='utf-8', timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('Delegating scheduled refresh', result.stdout)
         self.assertTrue((self.state / 'last_success_date.txt').exists())

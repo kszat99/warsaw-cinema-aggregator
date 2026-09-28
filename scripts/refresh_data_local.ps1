@@ -114,6 +114,9 @@ try {
     }
 
     $env:PYTHONIOENCODING = "utf-8"
+    $env:PYTHONUNBUFFERED = "1"
+    $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $OutputEncoding
     $env:MULTIKINO_REQUEST_DELAY_SECONDS = "0"
     $env:MULTIKINO_RETRY_DELAYS_SECONDS = "0"
     $previousPreference = $ErrorActionPreference
