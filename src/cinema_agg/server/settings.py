@@ -1,6 +1,7 @@
 """Explicit environment configuration, without automatic .env loading."""
 
 import os
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +12,7 @@ class Settings(BaseModel):
 
     host: Literal["127.0.0.1", "::1"] = "127.0.0.1"
     port: int = Field(default=8000, ge=1024, le=65535)
+    database_path: Path = Path("data/cinema-development.sqlite3")
 
     @classmethod
     def from_environment(cls) -> "Settings":

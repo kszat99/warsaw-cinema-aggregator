@@ -40,6 +40,11 @@ def main() -> None:
             'assert create_app(); '
             'assert CINEMAS; print("Installed wheel:", version("warsaw-cinema-aggregator"))',
         ], cwd=work, check=True)
+        # Migration assets must also ship inside the wheel, not just Python imports.
+        subprocess.run([
+            str(python), '-I', '-m', 'cinema_agg.server.data',
+            '--database', str(work / 'wheel-check.sqlite3'), 'migrate',
+        ], cwd=work, check=True)
     print('Fresh wheel installation and imports passed; no cinema requests made.')
 
 

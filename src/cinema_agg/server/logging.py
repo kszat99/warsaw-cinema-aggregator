@@ -11,9 +11,18 @@ logger = logging.getLogger("cinema.api")
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        event = record.msg if record.msg in {
-            "api_started", "api_stopped", "request_completed", "request_failed",
-        } else "runtime_event"
+        event = (
+            record.msg
+            if record.msg
+            in {
+                "api_started",
+                "api_stopped",
+                "request_completed",
+                "request_failed",
+                "database_unavailable",
+            }
+            else "runtime_event"
+        )
         fields: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,

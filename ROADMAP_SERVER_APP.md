@@ -1,12 +1,12 @@
 # Warsaw Cinema Aggregator — Server App Roadmap
 
-Updated: 2026-09-28. **Status: Phase 0 packaging and checks implemented; backend implementation has not started.**
+Updated: 2026-09-28. **Status: local database-to-API slice implemented; no VPS deployment.**
 
 This is the working plan for a maintainable server application and an L2/support/incident engineering portfolio project. Reliability must be demonstrated through measurements and recovery exercises. Smoke tests establish that sampled requests worked, not production guarantees.
 
 ## Resume here
 
-**Resume with Phase 1 — worker lifecycle, then host preparation.** The local API foundation now has validated loopback configuration, `/health/live`, JSON logs, generated request IDs and generic correlated errors. See [local API instructions](docs/local-api.md). Local tests, strict backend types/lint, real HTTP smoke and clean wheel installation pass. Historical credential revocation/rotation (if live) still needs owner confirmation. No VPS deployment yet.
+**Current checkpoint: existing JSON → SQLite → screening API works locally.** At the user's request we prioritized a useful data path before worker/host scaffolding. Alembic migration, atomic snapshot import, read-only paginated `/api/v1/screenings` and database/schema readiness are implemented. All 3,949 rows from the September 27 local export (23 cinemas) matched a real HTTP API read after documented normalization. See [local API instructions](docs/local-api.md). Next: review/use this slice, then complete database backup/restore and durable provider identity before production ingestion; Phase 1 host/worker gates remain open. Historical credential rotation still needs owner confirmation if the old key is live.
 
 | Item | Current position |
 |---|---|
@@ -349,7 +349,7 @@ Mobile gate: usable at 360/390 px widths without unintended horizontal scrolling
 
 ## 11. Implementation phases and completion gates
 
-Phase 0 code/checks are complete with owner credential rotation confirmation pending; Phase 1 is **in progress**; Phases 2–9 are **not started**. Prefer a small working slice within each phase over creating every module at once.
+Phase 0 code/checks are complete with owner credential rotation confirmation pending. Phases 1–2 are **in progress**, with the first Phase 6 read endpoint implemented early to demonstrate the data path. Phases 3–5 and 7–9 are **not started**. This does not waive host, backup, identity or production-readiness gates.
 
 ### Phase 0 — Repository and baseline
 
@@ -372,6 +372,13 @@ Phase 0 code/checks are complete with owner credential rotation confirmation pen
 **Done:** no open terminal/root runtime required; config failures are actionable, logs searchable/redacted, restart demonstrated. Save sanitized service/port/restart results.
 
 ### Phase 2 — Database and restoration
+
+Completed local subset: immutable `imports`/`screenings` snapshot tables, explicit
+Alembic migration, atomic validated import, UTC milliseconds, query indexes,
+read-only API connections and schema readiness. These snapshot-scoped row IDs are
+not yet stable provider identities; do not schedule seat jobs against them.
+Windows SQLite is 3.49.1 with unverified WAL patch status, so this slice deliberately
+uses DELETE journal mode. Full phase completion below remains open.
 
 - [ ] Implement schema/identity/time invariants, indexes, migrations, read-only API access and lock handling.
 - [ ] Verify patched linked SQLite before WAL; add schema readiness checks.
@@ -480,6 +487,15 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 28, database/API slice: imported 3,949 rows / 23 cinemas from local
+`dist/showtimes.json` (source generated September 27, 11:11 Warsaw). Real HTTP
+pagination returned every source field correctly after UTC millisecond conversion,
+zero-duration-to-null conversion and known Iluzjon relative URL resolution.
+50 offline tests passed; strict types, lint, secret scan and runtime audit passed;
+clean installed wheel ran the bundled migration. Database is ignored local state
+at `data/cinema-development.sqlite3`; no cinema traffic or live/VPS deployment.
+Temporary verification server stopped. Hosted checks run on the development commit.
 
 September 28, Phase 1 local API slice: loopback-only service, configuration validation,
 liveness and privacy-conscious JSON logs implemented. 33 tests passed locally; runtime

@@ -31,8 +31,9 @@ The tests document current behavior; some experimental behaviors still need corr
 
 ## Local API foundation
 
-The development branch now includes a local FastAPI health service, validated
-configuration and structured request logs. It does not yet serve cinema data.
+The development branch now imports existing screening JSON into a migrated SQLite
+database and serves it through a read-only, paginated FastAPI endpoint. It includes
+validated configuration, liveness/readiness endpoints and structured request logs.
 See [local API instructions and boundaries](docs/local-api.md) for the single
 startup command and how to check it. The public static website is unchanged.
 

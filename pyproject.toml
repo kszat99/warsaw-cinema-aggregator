@@ -9,11 +9,14 @@ description = "Warsaw cinema showtimes and experimental seat observations"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "alembic>=1.16,<2",
     "beautifulsoup4>=4.14,<5",
     "fastapi>=0.115,<1",
     "httpx>=0.28,<0.29",
     "lxml>=6.0,<7",
     "pydantic>=2.12,<3",
+    "sqlalchemy>=2.0,<2.1",
+    "tzdata>=2026.1",
     "uvicorn>=0.30,<1",
 ]
 
