@@ -46,10 +46,14 @@ jobs:
         run: uv run --locked pytest -q
       - name: Syntax and correctness lint
         run: uv run --locked ruff check .
-      - name: Verify pip compatibility export matches the lock
-        run: |
-          uv export --locked --no-dev --no-emit-project --output-file requirements.txt --quiet
-          git diff --exit-code -- requirements.txt
+      - name: Backend lint
+        run: uv run --locked ruff check src/cinema_agg/server --select E,F,I,UP,B
+      - name: Backend strict types
+        run: uv run --locked mypy
+      - name: Export pip compatibility requirements
+        run: uv export --locked --no-dev --no-emit-project --output-file requirements.txt --quiet
+      - name: Verify export matches the lock
+        run: git diff --exit-code -- requirements.txt
       - name: Build and install outside the source tree
         run: uv run --locked python scripts/check_wheel.py
 

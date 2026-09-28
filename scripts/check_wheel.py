@@ -36,6 +36,8 @@ def main() -> None:
             'from cinema_agg.config import CINEMAS; '
             'from cinema_agg.build import PosterService; '
             'from cinema_agg.seat_availability import SeatAvailability; '
+            'from cinema_agg.server.app import create_app; '
+            'assert create_app(); '
             'assert CINEMAS; print("Installed wheel:", version("warsaw-cinema-aggregator"))',
         ], cwd=work, check=True)
     print('Fresh wheel installation and imports passed; no cinema requests made.')

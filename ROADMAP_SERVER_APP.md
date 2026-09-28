@@ -6,7 +6,7 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
-**Resume with Phase 1 — local observable API skeleton.** Phase 0 code/checks passed locally and on GitHub; historical credential revocation/rotation (if live) still needs owner confirmation. See [preparation notes](docs/repository-preparation.md). Next implementation slice: validated configuration, API liveness and structured logs locally, followed by the host checklist before deployment.
+**Resume with Phase 1 — worker lifecycle, then host preparation.** The local API foundation now has validated loopback configuration, `/health/live`, JSON logs, generated request IDs and generic correlated errors. See [local API instructions](docs/local-api.md). Local tests, strict backend types/lint, real HTTP smoke and clean wheel installation pass. Historical credential revocation/rotation (if live) still needs owner confirmation. No VPS deployment yet.
 
 | Item | Current position |
 |---|---|
@@ -349,7 +349,7 @@ Mobile gate: usable at 360/390 px widths without unintended horizontal scrolling
 
 ## 11. Implementation phases and completion gates
 
-Phase 0 is **in progress**; Phases 1–9 are **not started**. Prefer a small working slice within each phase over creating every module at once.
+Phase 0 code/checks are complete with owner credential rotation confirmation pending; Phase 1 is **in progress**; Phases 2–9 are **not started**. Prefer a small working slice within each phase over creating every module at once.
 
 ### Phase 0 — Repository and baseline
 
@@ -365,7 +365,8 @@ Phase 0 is **in progress**; Phases 1–9 are **not started**. Prefer a small wor
 
 - [ ] Verify OS/Python/SQLite/Chromium, clock sync, updates, recovery and IPv4/IPv6 exposure.
 - [ ] Establish tested SSH keys, unprivileged identities, private config/state and measured service limits.
-- [ ] Add validated config, FastAPI liveness, JSON logs/request IDs and worker heartbeat/shutdown skeleton.
+- [x] Add validated config, FastAPI liveness and JSON logs/request IDs locally; 33 offline tests pass, strict backend types/lint pass, real localhost HTTP and clean wheel smoke pass.
+- [ ] Add separate worker heartbeat/shutdown skeleton. No collectors run inside the API.
 - [ ] Run systemd services on loopback; verify reboot/restart behavior and browser sandbox compatibility.
 
 **Done:** no open terminal/root runtime required; config failures are actionable, logs searchable/redacted, restart demonstrated. Save sanitized service/port/restart results.
@@ -479,6 +480,12 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 28, Phase 1 local API slice: loopback-only service, configuration validation,
+liveness and privacy-conscious JSON logs implemented. 33 tests passed locally; runtime
+dependency audit found no known vulnerabilities. Live main checkout and VPS unchanged.
+Next: worker lifecycle skeleton and host audit before service deployment. Hosted CI
+result is available on the development branch's commit checks.
 
 | Date | Phase / environment | Completed and evidence | Next step |
 |---|---|---|---|

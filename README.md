@@ -29,6 +29,13 @@ Keep the live publisher's checkout/environment separate from this development en
 
 The tests document current behavior; some experimental behaviors still need correction before production, as recorded in the roadmap. Passing these tests does not validate every upstream website or cutoff policy.
 
+## Local API foundation
+
+The development branch now includes a local FastAPI health service, validated
+configuration and structured request logs. It does not yet serve cinema data.
+See [local API instructions and boundaries](docs/local-api.md) for the single
+startup command and how to check it. The public static website is unchanged.
+
 ## Configuration
 
 `TMDB_API_KEY` is an optional process environment variable used to look up missing posters. With no key, cached/source-provided posters remain usable and new TMDB lookups are skipped. Screening collection does not require it.
