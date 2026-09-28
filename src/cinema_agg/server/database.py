@@ -8,7 +8,7 @@ from alembic.config import Config
 from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.pool import NullPool
 
-SCHEMA_REVISION = "0001_snapshots"
+SCHEMA_REVISION = "0002_collection"
 
 
 class SchemaUnavailable(Exception):
@@ -54,6 +54,8 @@ def require_schema(connection: Connection) -> None:
     )
     if versions != [SCHEMA_REVISION]:
         raise SchemaUnavailable("Database schema does not match this application.")
+    connection.execute(text("SELECT id, status, snapshot_id FROM fetch_runs LIMIT 0"))
+    connection.execute(text("SELECT run_id, outcome FROM fetch_results LIMIT 0"))
     # Check expected columns too, rather than trusting only the version marker.
     connection.execute(
         text(

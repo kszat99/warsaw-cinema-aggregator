@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
+from sqlalchemy import Connection, text
 
 from .contracts import LegacySnapshot, utc_milliseconds
 from .database import database_engine, require_schema
@@ -25,6 +25,21 @@ def import_snapshot(
     if len(raw) > MAX_SOURCE_BYTES:
         raise ValueError("Source exceeds 50 MiB.")
     data = LegacySnapshot.model_validate_json(raw)
+    engine = database_engine(path, readonly=False)
+    try:
+        with engine.begin() as connection:
+            return store_snapshot(connection, data, raw, source_timezone)
+    finally:
+        engine.dispose()
+
+
+def store_snapshot(
+    connection: Connection,
+    data: LegacySnapshot,
+    raw: bytes,
+    source_timezone: str,
+) -> dict[str, object]:
+    """Store within the caller's transaction, including collection-run metadata."""
     source_hash = hashlib.sha256(raw).hexdigest()
     snapshot_id = hashlib.sha256(raw + b"\0" + source_timezone.encode()).hexdigest()
     generated = utc_milliseconds(data.generated_at, source_timezone)
@@ -39,56 +54,49 @@ def import_snapshot(
             tags=json.dumps(screening.tags, ensure_ascii=True),
         )
         rows.append(row)
-    engine = database_engine(path, readonly=False)
-    try:
-        with engine.begin() as connection:
-            require_schema(connection)
-            exists = connection.execute(
-                text("SELECT id FROM imports WHERE id = :id"),
-                {"id": snapshot_id},
-            ).scalar_one_or_none()
-            if exists is not None:
-                return {
-                    "status": "already_imported",
-                    "snapshot_id": snapshot_id,
-                    "rows": len(rows),
-                }
-            latest = connection.execute(
-                text("SELECT max(generated_at_ms) FROM imports")
-            ).scalar()
-            if latest is not None and generated <= latest:
-                raise ValueError(
-                    "Source must be newer than the latest imported snapshot."
-                )
-            connection.execute(
-                text(
-                    "INSERT INTO imports "
-                    "(id, source_sha256, source_timezone, generated_at_ms, "
-                    "imported_at_ms, row_count) "
-                    "VALUES (:id, :sha, :zone, :generated, :imported, :rows)"
-                ),
-                {
-                    "id": snapshot_id,
-                    "sha": source_hash,
-                    "zone": source_timezone,
-                    "generated": generated,
-                    "imported": utc_milliseconds(datetime.now(UTC), "UTC"),
-                    "rows": len(rows),
-                },
-            )
-            connection.execute(
-                text(
-                    "INSERT INTO screenings "
-                    "(snapshot_id, ordinal, cinema_id, cinema_name, title_raw, "
-                    "title_norm, starts_at_ms, scraped_at_ms, duration_min, "
-                    "language, tags, booking_url, poster_url) "
-                    "VALUES (:snapshot_id, :ordinal, :cinema_id, :cinema_name, "
-                    ":title_raw, :title_norm, "
-                    ":starts_at_ms, :scraped_at_ms, :duration_min, :language, :tags, "
-                    ":booking_url, :poster_url)"
-                ),
-                rows,
-            )
-    finally:
-        engine.dispose()
+    require_schema(connection)
+    exists = connection.execute(
+        text("SELECT id FROM imports WHERE id = :id"),
+        {"id": snapshot_id},
+    ).scalar_one_or_none()
+    if exists is not None:
+        return {
+            "status": "already_imported",
+            "snapshot_id": snapshot_id,
+            "rows": len(rows),
+        }
+    latest = connection.execute(
+        text("SELECT max(generated_at_ms) FROM imports")
+    ).scalar()
+    if latest is not None and generated <= latest:
+        raise ValueError("Source must be newer than the latest imported snapshot.")
+    connection.execute(
+        text(
+            "INSERT INTO imports "
+            "(id, source_sha256, source_timezone, generated_at_ms, "
+            "imported_at_ms, row_count) "
+            "VALUES (:id, :sha, :zone, :generated, :imported, :rows)"
+        ),
+        {
+            "id": snapshot_id,
+            "sha": source_hash,
+            "zone": source_timezone,
+            "generated": generated,
+            "imported": utc_milliseconds(datetime.now(UTC), "UTC"),
+            "rows": len(rows),
+        },
+    )
+    connection.execute(
+        text(
+            "INSERT INTO screenings "
+            "(snapshot_id, ordinal, cinema_id, cinema_name, title_raw, "
+            "title_norm, starts_at_ms, scraped_at_ms, duration_min, "
+            "language, tags, booking_url, poster_url) "
+            "VALUES (:snapshot_id, :ordinal, :cinema_id, :cinema_name, "
+            ":title_raw, :title_norm, "
+            ":starts_at_ms, :scraped_at_ms, :duration_min, :language, :tags, "
+            ":booking_url, :poster_url)"
+        ),
+        rows,
+    )
     return {"status": "imported", "snapshot_id": snapshot_id, "rows": len(rows)}

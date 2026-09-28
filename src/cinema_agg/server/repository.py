@@ -34,10 +34,45 @@ def screenings_page(
             .mappings()
             .first()
         )
+        run_query = "SELECT * FROM fetch_runs"
+        if snapshot_id is not None:
+            run_query += " WHERE snapshot_id=:snapshot_id"
+        run_query += " ORDER BY started_at_ms DESC LIMIT 1"
+        run = (
+            connection.execute(
+                text(run_query),
+                {
+                    "snapshot_id": snapshot_id,
+                },
+            )
+            .mappings()
+            .first()
+        )
+        collection = None
+        if run is not None:
+            results = connection.execute(
+                text(
+                    "SELECT cinema_id, target_date, outcome, count, previous_count, "
+                    "duration_ms, error_type, observed_at_ms FROM fetch_results "
+                    "WHERE run_id=:id ORDER BY cinema_id, target_date"
+                ),
+                {"id": run["id"]},
+            ).mappings()
+            collection = {
+                "run_id": run["id"],
+                "status": run["status"],
+                "snapshot_id": run["snapshot_id"],
+                "started_at": utc_datetime(run["started_at_ms"]).isoformat(),
+                "finished_at": utc_datetime(run["finished_at_ms"]).isoformat()
+                if run["finished_at_ms"] is not None
+                else None,
+                "results": [dict(result) for result in results],
+            }
         if snapshot is None:
             if snapshot_id is not None:
                 raise SnapshotNotFound
             return ScreeningPage(
+                collection=collection,
                 snapshot=None,
                 total=0,
                 limit=limit,
@@ -86,6 +121,7 @@ def screenings_page(
             for row in rows
         ]
         return ScreeningPage(
+            collection=collection,
             snapshot=SnapshotView(
                 id=snapshot["id"],
                 generated_at=utc_datetime(snapshot["generated_at_ms"]),

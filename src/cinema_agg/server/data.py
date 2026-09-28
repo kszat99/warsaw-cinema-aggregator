@@ -3,14 +3,17 @@
 import argparse
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
 
 from alembic.util.exc import CommandError
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from .database import SchemaUnavailable, migrate
+from .contracts import utc_milliseconds
+from .database import SchemaUnavailable, database_engine, migrate, require_schema
 from .importer import import_snapshot
 from .settings import Settings
 
@@ -22,6 +25,11 @@ def main() -> None:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("migrate", help="Create/upgrade the local SQLite schema")
+    abandon = commands.add_parser(
+        "abandon-fetch",
+        help="Release a crashed run only AFTER its collector has stopped",
+    )
+    abandon.add_argument("run_id")
     importer = commands.add_parser(
         "import-json", help="Import a validated legacy snapshot"
     )
@@ -37,6 +45,24 @@ def main() -> None:
         if args.command == "migrate":
             migrate(path)
             result: dict[str, object] = {"status": "schema_ready"}
+        elif args.command == "abandon-fetch":
+            engine = database_engine(path, readonly=False)
+            try:
+                with engine.begin() as connection:
+                    require_schema(connection)
+                    connection.execute(
+                        text(
+                            "UPDATE fetch_runs SET status='interrupted', "
+                            "finished_at_ms=:finished WHERE id=:id AND status='running'"
+                        ),
+                        {
+                            "id": args.run_id,
+                            "finished": utc_milliseconds(datetime.now(UTC), "UTC"),
+                        },
+                    )
+            finally:
+                engine.dispose()
+            result = {"status": "abandon_requested", "run_id": args.run_id}
         else:
             result = import_snapshot(path, args.source, args.source_timezone)
     except ValidationError as exc:

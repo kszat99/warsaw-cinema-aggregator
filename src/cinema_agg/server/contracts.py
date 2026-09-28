@@ -101,6 +101,7 @@ class SnapshotView(BaseModel):
 
 
 class ScreeningPage(BaseModel):
+    collection: dict[str, object] | None = None
     snapshot: SnapshotView | None
     total: int
     limit: int

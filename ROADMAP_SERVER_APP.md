@@ -6,7 +6,7 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
-**Current checkpoint: existing JSON → SQLite → screening API works locally.** At the user's request we prioritized a useful data path before worker/host scaffolding. Alembic migration, atomic snapshot import, read-only paginated `/api/v1/screenings` and database/schema readiness are implemented. All 3,949 rows from the September 27 local export (23 cinemas) matched a real HTTP API read after documented normalization. See [local API instructions](docs/local-api.md). Next: review/use this slice, then complete database backup/restore and durable provider identity before production ingestion; Phase 1 host/worker gates remain open. Historical credential rotation still needs owner confirmation if the old key is live.
+**Current checkpoint: fresh cinema fetch → SQLite → API works locally.** The new collector calls existing adapters in cinema/date scopes, records durable results and publishes accepted scopes atomically while retaining failed scopes. Live pilot: Kinoteka, September 29, 33 screenings freshly fetched; other scopes were not refreshed. See [local instructions](docs/local-api.md). Next: broaden the controlled provider pilot, harden provider completeness classification, then connect seat observations with durable event identity. Host, backup/restore and unattended-service gates remain open. Historical credential rotation still needs owner confirmation if the old key is live.
 
 | Item | Current position |
 |---|---|
@@ -53,7 +53,7 @@ First release:
 
 - Continuously hosted, mobile-friendly showtime website and read-only API.
 - Durable scheduled collection with useful data retained when a cinema fails.
-- One planned late seat observation per eligible screening, with limited retries.
+- Seat checks at T-5, T and T+5 plus the evidence-based provider offset; deduplicate coincident checks and bound retries/provider traffic. Revisit the number of checks only after reviewing repeatability.
 - Private operational report, actionable alerts and documented recovery.
 - Public timestamps and clear unknown/stale states.
 
@@ -128,6 +128,17 @@ SQLite remains appropriate while brief writes on one host meet latency/locking g
 ## 4. Collection policy and cutoff evidence
 
 T is the advertised start, interpreted in `Europe/Warsaw`. These are small historical samples, not chain-wide guarantees. Keep policy versions, sample dates, venue scope and evidence confidence.
+
+**Updated user requirement (September 28):** for each eligible screening, plan
+checks at **T-5 minutes, T, and T+5 minutes**, plus the provider-specific timing
+below. This is relative to the advertised start, not the film's end. Deduplicate
+identical offsets (one observation serves both purposes); nearby but different
+offsets are not automatically equivalent. Usually this means four observations,
+not the previously proposed single check. Save actual observation time/offset,
+event identity and outcomes to investigate cutoff variability. A failure never
+establishes closure or zero seats. Blocked/rate-limited endpoints still require
+cooldown; report skipped or late checks instead of bypassing provider limits.
+**This is a scheduling requirement, not a running seat worker yet.**
 
 | Venue/platform | Actual evidence | Provisional completion target for fresh-session validation |
 |---|---|---|
@@ -349,7 +360,14 @@ Mobile gate: usable at 360/390 px widths without unintended horizontal scrolling
 
 ## 11. Implementation phases and completion gates
 
-Phase 0 code/checks are complete with owner credential rotation confirmation pending. Phases 1–2 are **in progress**, with the first Phase 6 read endpoint implemented early to demonstrate the data path. Phases 3–5 and 7–9 are **not started**. This does not waive host, backup, identity or production-readiness gates.
+Phase 0 code/checks are complete with owner credential rotation confirmation pending. Phases 1–3 are **in progress**, with the first Phase 6 read endpoint implemented early. Phases 4–5 and 7–9 are **not started**. Follow these delivery milestones; the technical phases below support them rather than requiring every infrastructure component first.
+
+### Delivery milestones (follow these when resuming)
+
+1. **Fresh screenings → DB → API:** working local pilot; broaden provider validation and improve completeness/error reporting before automatic refresh.
+2. **Seat observations → DB → API:** implement stable provider/hall identity, corrected outcomes and T-5/T/T+5 plus evidence-timed checks. No seat jobs run yet.
+3. **Unattended VPS operation:** finish host security, backup/restore, scheduling, restart/recovery and alerts; prove continuous operation.
+4. **Website integration and usability:** API-backed frontend, mobile accessibility, freshness indicators and privacy-conscious visitor analytics.
 
 ### Phase 0 — Repository and baseline
 
@@ -388,6 +406,13 @@ uses DELETE journal mode. Full phase completion below remains open.
 **Done:** backup restores with expected data and API reads; migration and schema-compatible rollback procedures documented. Save restore/migration proof.
 
 ### Phase 3 — Reliable showtime ingestion
+
+Local subset implemented: sequential legacy-adapter bridge; cinema/date run results;
+empty/error/count-drop retention; API reports latest run and scope outcomes. Only a
+Kinoteka one-day live pilot is verified so far. `accepted` means nonempty, validated,
+scope-matching output that passed a count check, not proof of parser completeness.
+Snapshot replacement does not establish cancellation of absent screenings; stronger
+provider-specific completeness and long-running validation remain required.
 
 - [ ] Typed per-scope results; distinguish empty/partial/failed/blocked, retain last-good data, quarantine suspicious drops.
 - [ ] Persist run/results/health; normalize identity/time and reconcile changed/removed screenings.
@@ -487,6 +512,16 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 28, fresh collection slice: new operator collector calls the existing
+adapters sequentially and records each cinema/date outcome in migrated tables.
+Errors, uncertain empties and drops over 50% retain earlier rows. Snapshot and run
+publication are atomic; overlap, cancellation and stale-publication guards tested.
+Explicit propagated 403/429 blocks stop further requests for the run. Live Kinoteka
+pilot returned 33 September 29 screenings; a real HTTP API read confirmed their
+fresh timestamps and collection metadata. Other cinemas/dates were not live-tested
+in this slice. Existing site/VPS unchanged. Seating policy amended to T-5/T/T+5
+plus provider evidence timing, deduplicated; no seat worker started.
 
 September 28, database/API slice: imported 3,949 rows / 23 cinemas from local
 `dist/showtimes.json` (source generated September 27, 11:11 Warsaw). Real HTTP
