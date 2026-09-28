@@ -6,7 +6,7 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
-**Current step: Phase 0 — verify development CI after push.** File review, configuration, Python packaging, locked dependencies and offline checks are implemented. Historical credential revocation/rotation (if live) still needs owner confirmation. See [preparation notes](docs/repository-preparation.md). Next implementation slice: Phase 1 validated configuration, API liveness and structured logs locally, followed by the host checklist before deployment.
+**Resume with Phase 1 — local observable API skeleton.** Phase 0 code/checks passed locally and on GitHub; historical credential revocation/rotation (if live) still needs owner confirmation. See [preparation notes](docs/repository-preparation.md). Next implementation slice: validated configuration, API liveness and structured logs locally, followed by the host checklist before deployment.
 
 | Item | Current position |
 |---|---|
@@ -356,7 +356,7 @@ Phase 0 is **in progress**; Phases 1–9 are **not started**. Prefer a small wor
 - [x] Review tracked/untracked files; preserve user edits/evidence. Ignore secrets, DB/WAL, logs, raw captures and profiles. Audit broad *.json/*.js ignores so intended fixtures are not lost.
 - [ ] Owner: confirm historical source credential revocation/rotation if live.
 - [x] Package existing src/cinema_agg with pyproject.toml; support Python 3.12/3.13 and lock runtime/dev dependencies. Pin production browser tooling when migrating providers in Phase 4; existing research still uses external Chrome.
-- [x] Add offline tests, scoped correctness lint and source-secret/runtime-dependency checks in CI; document the existing baseline. Verify hosted CI after push.
+- [x] Add offline tests, scoped correctness lint and source-secret/runtime-dependency checks in CI; document the existing baseline. All four hosted jobs passed for commit `600d148` ([run](https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36439248607)).
 - [x] Write README, config example and sanitized provider/evidence summary; include research code in the development commit for fresh clones.
 
 **Done:** a fresh environment installs/tests from documented commands; exact local/VPS code versions are identifiable. Save commit/CI/install evidence.
@@ -484,7 +484,7 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 |---|---|---|---|
 | 2026-09-27 | Planning / local | Reviewed against source, local experiment summary, user-reported VPS smoke and official documentation; security/data/recovery gates added | Phase 0; implementation/server settings/experiment files unchanged |
 | 2026-09-27 | Phase 0 / local, uncommitted | File inventory and ignore rules; sanitized evidence notes; optional environment-based TMDB key and missing-key poster guard; baseline 14 offline tests passed | Rotate old TMDB key if live; packaging/lock/CI next. No deployment or experiment-data deletion |
-| 2026-09-28 | Phase 0 / codex/server-app | uv lock, package build, CI, source secret scan and runtime advisory checks; 24 local offline tests pass; wheel imports in clean environment; Ruff and audits pass | Check hosted CI after push; owner credential rotation remains open; next Phase 1 local observable API skeleton |
+| 2026-09-28 | Phase 0 / codex/server-app, `600d148` | uv lock, package build, CI, source secret scan and runtime advisory checks; 24 local offline tests pass; wheel imports in clean environment; all four GitHub jobs passed in run 36439248607 | Owner credential rotation remains open; next Phase 1 local observable API skeleton. Production checkout clean on main; review CSV/notes and registration-script edits preserved unstaged |
 | 2026-09-28 | Live-site maintenance / separate main checkout | Investigated 08:58 task exit 1; original error output unavailable. Diagnostic rerun succeeded. Real scheduled rerun returned 0, published 3,410 screenings from all 23 cinemas with zero health alerts at 11:41 Warsaw time; Pages run 36405125717 succeeded and public JSON matched local output. Added isolated environment, logged/locked publisher, checked Git exits, branch/index guards and routing | Keep development separate; resume Phase 0 packaging/CI. Preserve production checkout and launcher route |
 
 Future entries must distinguish local commit from deployed commit. No credentials/raw sessions in this file. When a policy changes, update its section and record the evidence here.

@@ -58,7 +58,7 @@ After changes: all 14 tests passed again. Additional offline checks confirmed en
 - Local validation: 24 tests passed on Windows/Python 3.13; Ruff passed; source scanner reported zero findings; pip-audit reported no known advisories in locked runtime dependencies including optional curl_cffi. A wheel installed/imported successfully in a fresh environment outside the repository.
 - Tests prevent external Python socket traffic. Loopback/Unix sockets are allowed for event-loop operation. Seven publisher tests use temporary local repositories and run only on Windows. Browser/cinema behavior still needs the later controlled live validation.
 - Removed import-time stdout wrapping so importing the package does not interfere with test capture. Windows UTF-8 configuration remains in the build command entry point.
-- GitHub CI covers Linux/Python 3.12 and 3.13 plus Windows/Python 3.13. Its execution evidence will be recorded after the development push.
+- GitHub CI covers Linux/Python 3.12 and 3.13 plus Windows/Python 3.13. All three test jobs and the security job passed for commit `600d148`: [run 36439248607](https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36439248607). Clean package builds/imports and lock/export consistency passed on each test platform.
 - Research scripts/tests are retained as research. Their external Chrome dependency is not yet pinned; the production browser migration/validation remains a later gate.
 
 Remaining owner action: confirm revocation/rotation of the historical TMDB key if live. Phase 0 remains open on that item; the VPS retains its previous checkout/configuration. Existing user review CSV/Markdown and task-registration edits remain outside the packaging commit.
