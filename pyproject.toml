@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "warsaw-cinema-aggregator"
+version = "0.1.0"
+description = "Warsaw cinema showtimes and experimental seat observations"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "beautifulsoup4>=4.14,<5",
+    "httpx>=0.28,<0.29",
+    "lxml>=6.0,<7",
+    "pydantic>=2.12,<3",
+]
+
+[project.optional-dependencies]
+# Explicit opt-in: installing this changes the Multikino HTTP transport.
+impersonation = ["curl-cffi>=0.13,<1"]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-socket==0.8.1",
+    "ruff==0.16.9",
+    "pip-audit==2.10.1",
+    "detect-secrets==1.5.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cinema_agg"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/cinema_agg", "pyproject.toml", "README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Asyncio's Windows loop uses loopback TCP; external connections stay blocked.
+addopts = "--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1"
+
+[tool.ruff]
+target-version = "py312"
+include = ["src/**/*.py", "tests/**/*.py", "scripts/**/*.py", "pyproject.toml"]
+
+[tool.ruff.lint]
+# Initial legacy baseline: syntax errors, invalid control flow and undefined names.
+# Broader style/type checks will accompany the new backend modules in Phase 1.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.uv]
+required-version = "==0.12.19"

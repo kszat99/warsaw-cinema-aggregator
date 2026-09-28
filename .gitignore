@@ -19,28 +19,27 @@ dist/poster_cache.json
 
 # --- Research & Temporary Debris ---
 # Ignore all research scripts in root
-analyze_*.py
-explore_*.py
-fetch_*.py
-extract_*.py
-find_api*.py
-inspect_*.py
-debug_*.py
-read_log.py
-test_*.py
-!tests/test_*.py
-parse_*.py
-clear_*.py
+/analyze_*.py
+/explore_*.py
+/fetch_*.py
+/extract_*.py
+/find_api*.py
+/inspect_*.py
+/debug_*.py
+/read_log.py
+/test_*.py
+/parse_*.py
+/clear_*.py
 
 # Ignore HTML/JSON/JS samples in root (Keep index, app, styles)
-*.html
+/*.html
 !index.html
-*.json
-*.js
+/*.json
+/*.js
 !app.js
 
 # Ignore specific local database or JSON files
-data/
+/data/
 user_mickiewicz.json
 cinema_city_sample.json
 multikino_api_real.json
@@ -54,3 +53,35 @@ muranow_detail_text.txt
 !README.md
 !requirements.txt
 !.gitignore
+
+# Local credentials (examples contain placeholders only)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local runtime state and diagnostics; preserve existing tracked files
+/tmp/
+/outputs/seat-cutoff/
+*.log
+*.pid
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+/artifacts/
+*.egg-info/

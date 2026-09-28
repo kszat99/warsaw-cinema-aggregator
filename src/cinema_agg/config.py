@@ -1,3 +1,5 @@
+import os
+
 from .models import Cinema
 
 CINEMAS = [
@@ -141,4 +143,4 @@ CINEMAS = [
     ),
 ]
 
-TMDB_API_KEY = "025f0e9a919ce48007c36e7cd74f4e92"
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "").strip()

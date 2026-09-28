@@ -3,7 +3,7 @@ from datetime import date
 
 import httpx
 
-from src.cinema_agg.adapters.kultura import KulturaAdapter
+from cinema_agg.adapters.kultura import KulturaAdapter
 
 
 class FakeClient:

@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import sys
-import io
 from datetime import date, timedelta, datetime
 from pathlib import Path
 from typing import List
@@ -46,11 +45,6 @@ ADAPTER_MAP = {
     "kultura": KulturaAdapter,
 }
 
-# Fix for Windows console encoding
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-
 class PosterService:
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -71,6 +65,10 @@ class PosterService:
     async def get_poster(self, title_norm: str, title_raw: str) -> Optional[str]:
         if title_norm in self.cache:
             return self.cache[title_norm]
+
+        # Poster enrichment is optional; never send unauthenticated TMDB requests.
+        if not self.api_key:
+            return None
         
         search_titles = clean_title_search_candidates(title_raw) or [clean_title_for_search(title_raw)]
         print(f"  - Searching poster for: '{search_titles[0]}' (from '{title_raw}')")
@@ -349,4 +347,7 @@ async def run_build():
         print("Health alerts will be reported by the deploy workflow if committed.", flush=True)
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
     asyncio.run(run_build())

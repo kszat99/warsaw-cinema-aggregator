@@ -3,8 +3,8 @@ from datetime import date
 
 import httpx
 
-from src.cinema_agg.adapters.novekino import NovekinoAdapter
-from src.cinema_agg.normalize import normalize_title
+from cinema_agg.adapters.novekino import NovekinoAdapter
+from cinema_agg.normalize import normalize_title
 
 
 class FakeClient:
