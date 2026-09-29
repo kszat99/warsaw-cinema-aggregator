@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Kinoteka schedules every six hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:10:00 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=cinema-pilot-refresh.service
+
+[Install]
+WantedBy=timers.target

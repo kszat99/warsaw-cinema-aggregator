@@ -1,0 +1,17 @@
+[Unit]
+Description=Consistent local backup of cinema pilot observations
+
+[Service]
+Type=oneshot
+User=cinema-pilot
+Group=cinema-pilot
+Environment=CINEMA_API_DATABASE_PATH=/var/lib/cinema-pilot/cinema.sqlite3
+ExecStart=/opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.seat_pilot backup
+StateDirectory=cinema-pilot
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cinema-pilot
+MemoryMax=256M

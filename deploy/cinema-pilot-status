@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+systemctl --no-pager --plain is-active cinema-seat-pilot.service
+TZ=Europe/Warsaw sqlite3 -readonly -header -column /var/lib/cinema-pilot/cinema.sqlite3 <<'SQL'
+SELECT state, count(*) AS jobs FROM seat_jobs GROUP BY state;
+SELECT datetime(min(due_at_ms)/1000,'unixepoch','localtime') AS next_check_warsaw FROM seat_jobs WHERE state='pending';
+SELECT substr(j.title,1,36) AS film,
+       datetime(j.starts_at_ms/1000,'unixepoch','localtime') AS screening_warsaw,
+       j.purpose, j.offset_minutes, o.outcome, o.available, o.unavailable, o.capacity
+FROM seat_observations o JOIN seat_jobs j ON j.id=o.job_id
+ORDER BY o.attempted_at_ms DESC LIMIT 5;
+SQL

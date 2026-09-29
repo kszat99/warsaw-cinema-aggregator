@@ -1,12 +1,12 @@
 # Warsaw Cinema Aggregator — Server App Roadmap
 
-Updated: 2026-09-28. **Status: local database-to-API slice implemented; no VPS deployment.**
+Updated: 2026-09-29. **Status: Kinoteka seat-observation pilot running on the VPS.**
 
 This is the working plan for a maintainable server application and an L2/support/incident engineering portfolio project. Reliability must be demonstrated through measurements and recovery exercises. Smoke tests establish that sampled requests worked, not production guarantees.
 
 ## Resume here
 
-**Current checkpoint: fresh cinema fetch → SQLite → API works locally.** The new collector calls existing adapters in cinema/date scopes, records durable results and publishes accepted scopes atomically while retaining failed scopes. Live pilot: Kinoteka, September 29, 33 screenings freshly fetched; other scopes were not refreshed. See [local instructions](docs/local-api.md). Next: broaden the controlled provider pilot, harden provider completeness classification, then connect seat observations with durable event identity. Host, backup/restore and unattended-service gates remain open. Historical credential rotation still needs owner confirmation if the old key is live.
+**Current checkpoint: Kinoteka seats are being collected on the VPS.** A systemd worker plans T-5/T/T+5/T+40 checks from fresh today/tomorrow schedules and stores observations in SQLite. The pilot has successfully fetched counts from the VPS, completed an automatic scheduled check, and survived a service restart without job duplication. See [seat-pilot runbook](docs/seat-pilot.md); run `sudo cinema-pilot-status` on the VPS. Other seat providers remain disabled. Next: review a day of real timing/count/failure data, then expand providers individually. This is an isolated pilot, not the completed server app/public website migration. Historical credential rotation remains an owner item if live.
 
 | Item | Current position |
 |---|---|
@@ -16,7 +16,7 @@ This is the working plan for a maintainable server application and an L2/support
 | VPS evidence | User-reported September 27 smoke results returned counts for 19 sampled cinemas across seven booking platforms |
 | Still unproven | Sustained load, fresh-session timings, secure unattended operation, restoration and alert delivery |
 | Architecture | One VPS, FastAPI, SQLite, separate background processes, Nginx, systemd |
-| Current scope | Phase 0 repository preparation locally; no VPS deployment |
+| Current scope | Development API/database/collection plus an isolated Kinoteka seat pilot running on the VPS; public site unchanged |
 
 ### Keep the existing site operational during development
 
@@ -138,7 +138,8 @@ not the previously proposed single check. Save actual observation time/offset,
 event identity and outcomes to investigate cutoff variability. A failure never
 establishes closure or zero seats. Blocked/rate-limited endpoints still require
 cooldown; report skipped or late checks instead of bypassing provider limits.
-**This is a scheduling requirement, not a running seat worker yet.**
+**Now running for Kinoteka only.** Its additional evidence-timed check is T+40.
+Other providers still need validated implementations before enablement.
 
 | Venue/platform | Actual evidence | Provisional completion target for fresh-session validation |
 |---|---|---|
@@ -360,12 +361,12 @@ Mobile gate: usable at 360/390 px widths without unintended horizontal scrolling
 
 ## 11. Implementation phases and completion gates
 
-Phase 0 code/checks are complete with owner credential rotation confirmation pending. Phases 1–3 are **in progress**, with the first Phase 6 read endpoint implemented early. Phases 4–5 and 7–9 are **not started**. Follow these delivery milestones; the technical phases below support them rather than requiring every infrastructure component first.
+Phase 0 code/checks are complete with owner credential rotation confirmation pending. Phases 1–5 are **in progress**, with the first Phase 6 read endpoint implemented early. The isolated Kinoteka pilot covers part of Phases 4–5; full provider coverage and load validation remain outstanding. Phases 7–9 are not complete; pilot service and local backup setup provide only an initial subset. Follow these delivery milestones; the technical phases below support them rather than requiring every infrastructure component first.
 
 ### Delivery milestones (follow these when resuming)
 
 1. **Fresh screenings → DB → API:** working local pilot; broaden provider validation and improve completeness/error reporting before automatic refresh.
-2. **Seat observations → DB → API:** implement stable provider/hall identity, corrected outcomes and T-5/T/T+5 plus evidence-timed checks. No seat jobs run yet.
+2. **Seat observations → DB → API:** Kinoteka worker now runs on the VPS using provider event/cinema identity plus start-time revision. SQL/CSV inspection is available; public seat API and other providers remain to be implemented/validated.
 3. **Unattended VPS operation:** finish host security, backup/restore, scheduling, restart/recovery and alerts; prove continuous operation.
 4. **Website integration and usability:** API-backed frontend, mobile accessibility, freshness indicators and privacy-conscious visitor analytics.
 
@@ -512,6 +513,19 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 29, VPS pilot deployed: `/opt/cinema-pilot`, isolated user `cinema-pilot`,
+SQLite `/var/lib/cinema-pilot/cinema.sqlite3`. systemd seat worker plus six-hour
+schedule refresh and daily local backup timers enabled. Fresh schedules: 33 rows
+for September 29 and 33 for September 30. Diagnostic Momo 10:00 returned 70 available,
+97 unavailable / 167 capacity. Automatic Zizzi 09:45 check also succeeded (190/69/259).
+Worker started at 09:41 Warsaw; its initial T-5 attempt used the documented two-minute
+late window, and three earlier windows were recorded as missed. Restart changed the
+PID without duplicating jobs (265 total including one diagnostic). About 41 MB worker
+RAM. Local SQLite backup integrity and isolated restore checked. No new public port,
+no changes to the legacy live checkout/site. Existing CUPS listener on 631 was present
+before deployment and remains a separate host-hardening review item. External alerts,
+offsite backups and full-provider coverage are still pending. 78 local tests passed.
 
 September 28, fresh collection slice: new operator collector calls the existing
 adapters sequentially and records each cinema/date outcome in migrated tables.

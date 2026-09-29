@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily cinema pilot database backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+Unit=cinema-pilot-backup.service
+
+[Install]
+WantedBy=timers.target

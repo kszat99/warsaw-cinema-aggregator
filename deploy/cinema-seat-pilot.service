@@ -1,0 +1,29 @@
+[Unit]
+Description=Kinoteka seat analytics pilot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cinema-pilot
+Group=cinema-pilot
+WorkingDirectory=/opt/cinema-pilot
+Environment=CINEMA_API_DATABASE_PATH=/var/lib/cinema-pilot/cinema.sqlite3
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.seat_pilot run
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=35
+StateDirectory=cinema-pilot
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cinema-pilot
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
