@@ -13,6 +13,8 @@ class Settings(BaseModel):
     host: Literal["127.0.0.1", "::1"] = "127.0.0.1"
     port: int = Field(default=8000, ge=1024, le=65535)
     database_path: Path = Path("data/cinema-development.sqlite3")
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
 
     @classmethod
     def from_environment(cls) -> "Settings":
