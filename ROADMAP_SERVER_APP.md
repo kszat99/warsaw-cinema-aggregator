@@ -442,6 +442,11 @@ provider-specific completeness and long-running validation remain required.
 
 ### Phase 6 — API and operational visibility
 
+Operator-view correction: status and health commands now share one report with
+warning reasons first, all affected jobs/failed attempts with timestamps and IDs,
+then recent results and upcoming checks. No warning evidence is hidden by the
+recent-results limit. Startup causes are not inferred from absent attempts.
+
 Implemented pilot subset: `sudo cinema-pilot-health` produces a read-only rolling
 health report (text/JSON), covering refresh counts/freshness, worker heartbeat,
 scheduled observation coverage/errors/delay and local backup checks. Startup misses

@@ -5,6 +5,18 @@ HTTPS; it never selects, reserves or purchases seats. Other providers remain dis
 
 ## Inspect it
 
+`cinema-pilot-status` and `cinema-pilot-health` now show the same full report.
+WHY THIS STATUS explains every warning first. All affected jobs and failed scheduled
+attempts in the selected window follow, even when older than the five recent results.
+Records show film, screening/planned/attempted/finished times in Warsaw, delay,
+deadline, result, HTTP status, counts and correlation IDs. Next checks appear last.
+Manual diagnostics are labelled explicitly, never as a screening-time check.
+Never-attempted jobs have no counts; their startup cause cannot be inferred reliably
+because the original database did not record why the attempt was skipped.
+The three initial Skarpetki checks at 09:25/09:30/09:35 Warsaw on September 29
+predated deployment, as verified during operator review. Historical warnings remain
+visible for the selected window and do not necessarily indicate a current outage.
+
 Health report (read-only, no cinema requests):
 
 ```sh
@@ -33,7 +45,7 @@ In the VPS SSH terminal:
 sudo cinema-pilot-status
 ```
 
-This shows whether the worker is active, job states, the next check in Warsaw time,
+This shows worker heartbeat health, warning evidence, next checks in Warsaw time,
 and recent observations. `unavailable` includes reservations/blocked seats; it is
 not verified ticket sales or attendance. `diagnostic` is a manual early smoke check,
 not a timed observation. Failed observations have null counts, not zero.

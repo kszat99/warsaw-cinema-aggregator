@@ -6,6 +6,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
@@ -85,7 +86,9 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 dict(row)
                 for row in db.execute(
                     text(
-                        "SELECT j.id,j.state,j.due_at_ms,j.deadline_ms, "
+                        "SELECT j.id,j.title,j.starts_at_ms,"
+                        "j.offset_minutes,j.purpose, "
+                        "j.state,j.due_at_ms,j.deadline_ms,j.source_observed_ms, "
                         "min(CASE WHEN o.outcome='success' THEN "
                         "o.attempted_at_ms END) AS success_at, "
                         "min(o.attempted_at_ms) AS first_attempt "
@@ -93,7 +96,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                         "o.job_id=j.id "
                         "WHERE j.purpose='scheduled' AND j.due_at_ms BETWEEN "
                         ":since AND :now "
-                        "GROUP BY j.id"
+                        "GROUP BY j.id ORDER BY j.due_at_ms,j.id"
                     ),
                     {"since": since, "now": now},
                 ).mappings()
@@ -118,6 +121,34 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 ),
                 {"now": now},
             ).scalar_one()
+            attempts = [
+                dict(row)
+                for row in db.execute(
+                    text(
+                        "SELECT j.id AS job_id,j.title,j.starts_at_ms,"
+                        "j.offset_minutes, "
+                        "j.purpose,j.state,j.due_at_ms,j.deadline_ms,o.id "
+                        "AS attempt_id, "
+                        "o.attempted_at_ms,o.finished_at_ms,o.outcome,o.http_status, "
+                        "o.available,o.unavailable,o.capacity FROM seat_observations o "
+                        "JOIN seat_jobs j ON j.id=o.job_id "
+                        "WHERE o.attempted_at_ms BETWEEN :since AND :now "
+                        "ORDER BY o.attempted_at_ms DESC,o.id"
+                    ),
+                    {"since": since, "now": now},
+                ).mappings()
+            ]
+            upcoming = [
+                dict(row)
+                for row in db.execute(
+                    text(
+                        "SELECT id,title,starts_at_ms,due_at_ms,offset_minutes,purpose "
+                        "FROM seat_jobs WHERE state='pending' AND due_at_ms>:now "
+                        "ORDER BY due_at_ms,id LIMIT 3"
+                    ),
+                    {"now": now},
+                ).mappings()
+            ]
             last_finished = db.execute(
                 text("SELECT max(finished_at_ms) FROM seat_observations")
             ).scalar()
@@ -178,6 +209,22 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "window_hours": hours,
         "status": "attention" if issues else "ok",
         "issues": issues,
+        "evidence": {
+            "problem_jobs": [
+                j
+                for j in jobs
+                if j["state"] in {"missed", "stale_source", "identity_conflict"}
+                or (j["state"] in {"pending", "running"} and j["deadline_ms"] < now)
+            ],
+            "failed_attempts": [
+                a
+                for a in attempts
+                if a["purpose"] == "scheduled"
+                and a["outcome"] not in {"success", "running"}
+            ],
+            "recent_attempts": attempts[:5],
+            "upcoming": upcoming,
+        },
         "worker": {
             "heartbeat_age_seconds": heartbeat_age,
             "last_finished_at_ms": last_finished,
@@ -185,6 +232,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         },
         "refresh": {
             "last_success_age_minutes": refresh_age,
+            "last_success_at_ms": success,
             "latest": None if latest is None else dict(latest),
             "scopes": scopes,
         },
@@ -206,37 +254,209 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     }
 
 
+def local_time(value: int | None) -> str:
+    if value is None or value == 0:
+        return "never recorded"
+    return datetime.fromtimestamp(value / 1000, ZoneInfo("Europe/Warsaw")).strftime(
+        "%Y-%m-%d %H:%M:%S %Z"
+    )
+
+
+def safe_label(value: Any) -> str:
+    # Provider strings must not inject terminal escapes or fake report lines.
+    return "".join(char if char.isprintable() else " " for char in str(value))
+
+
+def age(value: float | None) -> str:
+    return "unknown" if value is None else f"{value:.1f}"
+
+
+def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
+    purpose = (
+        "MANUAL DIAGNOSTIC"
+        if job["purpose"] == "diagnostic"
+        else (f"scheduled T{job['offset_minutes']:+d} minutes")
+    )
+    lines = [
+        f"  {safe_label(job['title'])}",
+        f"    Screening: {local_time(job['starts_at_ms'])} | {purpose}",
+        f"    Planned: {local_time(job['due_at_ms'])}",
+    ]
+    if attempt:
+        actual = job["attempted_at_ms"]
+        delay = (actual - job["due_at_ms"]) / 1000
+        timing = (
+            "manual check"
+            if job["purpose"] == "diagnostic"
+            else (
+                "within 120s allowance"
+                if actual <= job["deadline_ms"]
+                else "OUTSIDE allowance"
+            )
+        )
+        lines.append(
+            f"    Attempted: {local_time(actual)} | delay {delay:.1f}s ({timing})"
+        )
+        lines.append(
+            f"    Finished: {local_time(job['finished_at_ms'])} | "
+            f"Result: {safe_label(job['outcome'])} | HTTP: {job['http_status']}"
+        )
+        if job["available"] is not None:
+            lines.append(
+                f"    Seats: {job['available']} available / "
+                f"{job['unavailable']} unavailable / {job['capacity']} capacity"
+            )
+        else:
+            lines.append("    Seats: unknown (no valid counts from this attempt)")
+        lines.append(f"    Job: {job['job_id']}")
+        lines.append(f"    Attempt ID: {job['attempt_id']}")
+    else:
+        actual = job.get("first_attempt")
+        lines.append(
+            "    Attempted: "
+            + ("NEVER ATTEMPTED" if actual is None else local_time(actual))
+        )
+        lines.append(
+            f"    State: {job['state']} | Deadline: {local_time(job['deadline_ms'])}"
+        )
+        if actual is None:
+            lines.append(
+                "    No seat counts. Why no attempt occurred was not recorded."
+            )
+        if actual is not None:
+            lines.append(
+                f"    First attempt delay: {(actual - job['due_at_ms']) / 1000:.1f}s"
+            )
+        if job["state"] == "stale_source":
+            lines.append(
+                f"    Source fetched: {local_time(job['source_observed_ms'])} "
+                "| maximum source age 48 hours"
+            )
+        lines.append(f"    Job: {job['id']}")
+    return lines
+
+
+ISSUE_HELP = {
+    "worker_heartbeat_stale": "Worker heartbeat missing or older than 120s. "
+    "Check: sudo journalctl -u cinema-seat-pilot -n 30 --no-pager",
+    "schedule_refresh_stale": "No complete refresh in 7 hours. "
+    "Check: sudo journalctl -u cinema-pilot-refresh -n 30 --no-pager",
+    "latest_refresh_failed_or_partial": "Latest refresh did not complete successfully. "
+    "See cinema/date outcomes below; retained schedules may be older.",
+    "schedule_refresh_stuck": "Refresh has been running for over 10 minutes. "
+    "Inspect cinema-pilot-refresh logs.",
+    "overdue_unfinished_jobs": "Checks passed their deadline but are unfinished. "
+    "Affected jobs follow; inspect worker logs.",
+    "provider_cooldown": "Requests paused by provider cooldown until the time below. "
+    "Do not repeatedly retry the provider.",
+    "backup_missing": "No local backup found. Inspect cinema-pilot-backup logs/timer.",
+    "backup_invalid": "Newest local backup failed validation. "
+    "Preserve older backups and inspect cinema-pilot-backup logs.",
+    "backup_stale": "Newest local backup is over 26 hours old. "
+    "Inspect cinema-pilot-backup logs/timer.",
+    "seat_errors_in_window": "Scheduled attempts failed in this window. "
+    "Each failure follows; these are not proof that ticket sales closed.",
+    "missed_jobs_in_window": "Checks missed their allowed window. "
+    "Each affected job follows. Historical misses do not prove a current outage.",
+    "screening_identity_conflict": "Conflicting start times for a provider event. "
+    "Affected jobs follow; validate the source schedule.",
+    "jobs_with_stale_source": "Checks were skipped because their source schedule was "
+    "too old. Inspect schedule refresh results.",
+}
+
+
 def render(data: dict[str, Any]) -> str:
     refresh, seats, worker, backup = (
         data[k] for k in ("refresh", "seats", "worker", "backup")
     )
+    evidence = data["evidence"]
     lines = [
-        f"KINOTEKA HEALTH: {data['status'].upper()} | last "
-        f"{data['window_hours']} hours",
-        f"Checked: {data['generated_at']}",
-        f"Worker heartbeat age: {worker['heartbeat_age_seconds']} seconds (limit 120)",
-        f"Last successful refresh age: {refresh['last_success_age_minutes']} "
-        f"minutes (limit 420)",
-        f"Seat coverage: "
-        f"{seats['successful_jobs']}/{seats['windows_finished']} finished windows "
-        f"({seats['coverage_percent']}%); diagnostics excluded",
-        f"Missed: {seats['missed']} | overdue unfinished: "
-        f"{seats['overdue_unfinished']} | "
-        f"future pending: {seats['future_pending']}",
-        f"Maximum check start delay: {seats['max_start_delay_seconds']} seconds",
-        f"Attempt outcomes: {json.dumps(seats['attempt_outcomes'], sort_keys=True)}",
-        f"Local backup: {backup['status']} | age: {backup['age_minutes']} minutes",
-        "Refresh cinema/date results (current / previous screening count):",
+        f"KINOTEKA: {data['status'].upper()} | last {data['window_hours']} hours",
+        "All displayed times: Europe/Warsaw. "
+        "ATTENTION includes historical problems in this window.",
+        "Report generated: "
+        + datetime.fromisoformat(data["generated_at"])
+        .astimezone(ZoneInfo("Europe/Warsaw"))
+        .strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "",
+        "WHY THIS STATUS",
     ]
+    if not data["issues"]:
+        lines.append("  No detected problems in the checks below.")
+    for issue in data["issues"]:
+        lines.append(f"  [{issue}] {ISSUE_HELP[issue]}")
+    if evidence["problem_jobs"]:
+        lines.append(
+            "\nAFFECTED JOBS (all in window; not hidden by recent-result limit)"
+        )
+        for job in evidence["problem_jobs"]:
+            lines.extend(job_lines(job))
+    if evidence["failed_attempts"]:
+        lines.append("\nFAILED ATTEMPTS (all in window)")
+        for item in evidence["failed_attempts"]:
+            lines.extend(job_lines(item, attempt=True))
+    lines.extend(
+        [
+            "\nCURRENT WORKER / REFRESH / BACKUP",
+            f"  Heartbeat age: {age(worker['heartbeat_age_seconds'])}s (limit 120s)",
+            f"  Last finished attempt: {local_time(worker['last_finished_at_ms'])}",
+            f"  Request pacing/cooldown until: "
+            f"{local_time(worker['cooldown_until_ms'])}",
+            f"  Last complete refresh: {local_time(refresh['last_success_at_ms'])} "
+            f"| age {age(refresh['last_success_age_minutes'])}min (limit 420min)",
+        ]
+    )
+    latest = refresh["latest"]
+    if latest:
+        lines.append(f"  Latest refresh: {latest['status']} | run {latest['id']}")
+        lines.append(
+            f"    Started: {local_time(latest['started_at_ms'])} | "
+            f"Finished: {local_time(latest['finished_at_ms'])}"
+        )
+    else:
+        lines.append("  Latest refresh: none recorded")
     for scope in refresh["scopes"]:
         lines.append(
-            f"  {scope['cinema_id']} {scope['target_date']}: {scope['outcome']} "
-            f"{scope['count']} / {scope['previous_count']}"
+            f"    {scope['cinema_id']} {scope['target_date']}: "
+            f"{scope['outcome']} | screenings {scope['count']} / "
+            f"previous {scope['previous_count']} | error "
+            f"{scope['error_type'] or 'none'}"
         )
-    lines.append("Attention: " + (", ".join(data["issues"]) or "none"))
+    lines.extend(
+        [
+            f"  Local backup: {backup['status']} | age {age(backup['age_minutes'])}min "
+            "(limit 1560min)",
+            f"    File: {backup.get('file', 'none')} | quick_check only; no "
+            f"offsite guarantee",
+            "\nCOVERAGE (scheduled checks only; diagnostics excluded)",
+            f"  {seats['successful_jobs']}/{seats['windows_finished']} "
+            f"finished windows "
+            f"successful | coverage {age(seats['coverage_percent'])}%",
+            f"  Missed: {seats['missed']} | overdue unfinished: "
+            f"{seats['overdue_unfinished']} | future pending: "
+            f"{seats['future_pending']}",
+            f"  Max attempt start delay: {age(seats['max_start_delay_seconds'])}s "
+            "| allowance 120s",
+            f"  Attempts: {json.dumps(seats['attempt_outcomes'], sort_keys=True)}",
+            "\nRECENT ATTEMPTS (latest 5 in window; warnings above include "
+            "older failures)",
+        ]
+    )
+    for item in evidence["recent_attempts"]:
+        lines.extend(job_lines(item, attempt=True))
+    if not evidence["recent_attempts"]:
+        lines.append("  No attempts in this window.")
+    lines.append("\nNEXT CHECKS (up to 3)")
+    for job in evidence["upcoming"]:
+        lines.append(
+            f"  {local_time(job['due_at_ms'])} | {safe_label(job['title'])} "
+            f"| screening {local_time(job['starts_at_ms'])} "
+            f"| T{job['offset_minutes']:+d} minutes"
+        )
+    if not evidence["upcoming"]:
+        lines.append("  None pending in the future.")
     lines.append(
-        "Missed windows include startup misses; unavailable seats are not "
-        "confirmed sales."
+        "\nUnavailable seats include holds/blocked seats, not confirmed sales."
     )
     return "\n".join(lines)
 
@@ -257,7 +477,13 @@ def main() -> None:
         )
     except Exception:
         # No raw exception may expose filesystem or connection details to automation.
-        print(json.dumps({"status": "unavailable", "issues": ["health_report_failed"]}))
+        print(
+            json.dumps({"status": "unavailable", "issues": ["health_report_failed"]})
+            if args.json
+            else "KINOTEKA: UNAVAILABLE\nCannot read or validate the database/backup. "
+            "Check file permissions, configured database path and schema version. "
+            "This is a report failure, not evidence that cinema sales closed."
+        )
         raise SystemExit(2) from None
     print(json.dumps(data, indent=2) if args.json else render(data))
     raise SystemExit(1 if data["issues"] else 0)
