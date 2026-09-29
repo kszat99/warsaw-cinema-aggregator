@@ -42,6 +42,22 @@ is still outstanding. Reports never select/reserve seats or change collection st
 
 ### Notification delivery and retries
 
+Seat failures now use screening-specific incidents (provider cinema ID, event ID
+and exact start time). Consecutive failed scheduled attempts belong to one incident;
+the next scheduled success for that same identity resolves it. Diagnostics and
+successes for other screenings do not resolve it. A later failure opens a new episode.
+Incidents are derived from the retained observation history, not the rolling health
+window. An unresolved incident does not become recovered just because time passes.
+The status report shows active incidents and recently recovered incidents separately
+from historical failed attempts/coverage, which are never rewritten.
+If failure and recovery both happened before evaluation, one combined recovered
+summary is delivered. Recovery delivery retains the same durable retry behavior.
+The former aggregate `seat_errors_in_window` alert is retired as `superseded`; the
+historical health warning remains. Other operational warnings still use the report's
+existing condition-clearance semantics. No provider-wide incident aggregation yet.
+Current implementation scans retained attempts to reconstruct episodes; add indexed
+incremental processing before scaling to a large retained history.
+
 `alert_state` now distinguishes `pending_open`, `open` (delivered),
 `pending_resolved`, and `resolved` (clearance delivered). Legacy open records with
 no successful notification are retried automatically. Recurrences reuse the issue
@@ -58,7 +74,7 @@ the delivery retry timestamp. Operator maintenance suppression is not implemente
 If a send succeeds but the process dies before recording acknowledgement, a duplicate
 may occur on retry (at-least-once delivery). A report/database failure exits nonzero
 with a sanitized log; external monitoring is still needed to detect total outages.
-Clearance means the condition left the report, including historical records aging
+For non-seat incidents, clearance means the condition left the report, including records aging
 out of its 24-hour window; it does not by itself prove a new successful cinema request.
 
 Inspect evaluator runs without exposing its credential configuration:

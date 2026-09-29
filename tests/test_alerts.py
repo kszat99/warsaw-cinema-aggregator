@@ -10,7 +10,7 @@ from test_seat_pilot import NOW, engine  # noqa: F401
 
 
 def test_failed_open_retries_then_deduplicates_and_recurs(engine, tmp_path, monkeypatch):
-    data = {'issues': ['seat_errors_in_window'], 'evidence': {}}
+    data = {'issues': ['worker_heartbeat_stale'], 'evidence': {}}
     monkeypatch.setattr(alerts, 'report', lambda *a, **k: data)
     sent = []
     outcomes = iter([(False, 'timeout'), (True, None), (False, 'http_503'),
@@ -42,7 +42,7 @@ def test_failed_open_retries_then_deduplicates_and_recurs(engine, tmp_path, monk
     assert state()['state'] == 'pending_resolved'
     alerts.evaluate_alerts(path, NOW+3*alerts.RETRY_MS, Settings())
     assert state()['state'] == 'resolved'
-    data['issues'] = ['seat_errors_in_window']
+    data['issues'] = ['worker_heartbeat_stale']
     alerts.evaluate_alerts(path, NOW+4*alerts.RETRY_MS, Settings())
     assert state()['state'] == 'open'
     assert len(sent) == 5
@@ -52,9 +52,9 @@ def test_legacy_undelivered_alert_is_repaired(engine, tmp_path, monkeypatch):
     with engine.begin() as db:
         db.execute(text("INSERT INTO alert_state "
             "(fingerprint,state,first_seen_ms,last_seen_ms,last_notified_ms,evidence) "
-            "VALUES ('seat_errors_in_window','open',:now,:now,0,'{}')"), {'now': NOW})
+            "VALUES ('worker_heartbeat_stale','open',:now,:now,0,'{}')"), {'now': NOW})
     monkeypatch.setattr(alerts, 'report', lambda *a, **k: {
-        'issues': ['seat_errors_in_window', 'notification_delivery_pending'], 'evidence': {}})
+        'issues': ['worker_heartbeat_stale', 'notification_delivery_pending'], 'evidence': {}})
     calls = []
     monkeypatch.setattr(alerts, 'send_telegram', lambda *a: (calls.append(a) or True, None))
     alerts.evaluate_alerts(tmp_path/'seats.sqlite3', NOW+1000, Settings())
@@ -78,7 +78,7 @@ def test_telegram_plain_text_and_failure_redaction(monkeypatch):
 
 
 def test_message_budget_and_no_markdown():
-    message = alerts.format_alert_message('seat_errors_in_window', {
+    message = alerts.format_alert_message('worker_heartbeat_stale', {
         'evidence': {'failed_attempts': [dict(title='x'*10000, outcome='network_error')]*5}})
     assert len(message) < 3500
     assert 'historical errors' in message

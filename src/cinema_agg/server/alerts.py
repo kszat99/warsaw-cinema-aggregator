@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from .database import database_engine, require_schema
 from .pilot_health import ISSUE_HELP, local_time, report, safe_label
+from .seat_incidents import incident_message
 from .settings import Settings
 
 RETRY_MS = 15 * 60_000
@@ -85,7 +86,13 @@ def send_telegram(message: str, settings: Settings) -> tuple[bool, str | None]:
 def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
     data = report(path, now, hours=24)
     # Delivery health cannot recursively generate its own delivery alert.
-    current = set(data["issues"]) - {"notification_delivery_pending"}
+    current = set(data["issues"]) - {
+        "notification_delivery_pending",
+        "seat_errors_in_window",
+        "seat_incident_open",
+    }
+    screening_incidents = {i["fingerprint"]: i for i in data.get("seat_incidents", [])}
+    current.update(k for k, i in screening_incidents.items() if not i["recovery"])
     engine = database_engine(path, readonly=False)
     try:
         with engine.begin() as conn:
@@ -94,7 +101,15 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
                 r["fingerprint"]: dict(r)
                 for r in conn.execute(text("SELECT * FROM alert_state")).mappings()
             }
-            for issue in sorted(current | previous.keys()):
+            # Retire the old aggregate; never call age-out a screening recovery.
+            conn.execute(
+                text(
+                    "UPDATE alert_state SET state='superseded' "
+                    "WHERE fingerprint='seat_errors_in_window'"
+                )
+            )
+            previous.pop("seat_errors_in_window", None)
+            for issue in sorted(current | previous.keys() | screening_incidents.keys()):
                 old = previous.get(issue)
                 active = issue in current
                 state = old["state"] if old else "resolved"
@@ -109,6 +124,11 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
                 elif state in {"open", "pending_open"}:
                     state = "pending_resolved"
                     evidence = {}
+                if issue in screening_incidents:
+                    incident = screening_incidents[issue]
+                    if old is None and incident["recovery"]:
+                        state = "pending_resolved"
+                    evidence["screening_incident"] = incident
                 transition = old is None or state != old["state"]
                 # Evidence refreshed each evaluation; preserve delivery attempt
                 evidence.update({"report_issues": sorted(current)})
@@ -162,6 +182,9 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
                 if opening
                 else format_resolved_message(item["fingerprint"], data)
             )
+            incident = json.loads(item["evidence"]).get("screening_incident")
+            if incident:
+                message = incident_message(incident)
             success, error = send_telegram(message, settings)
             evidence = json.loads(item["evidence"])
             evidence["delivery"] = {

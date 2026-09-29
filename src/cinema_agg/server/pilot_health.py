@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
 from .database import database_engine, require_schema
+from .seat_incidents import incidents
 from .settings import Settings
 
 MINUTE = 60_000
@@ -42,6 +43,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     try:
         with engine.begin() as db:
             require_schema(db)
+            seat_incidents = incidents(db, now)
             worker = dict(
                 db.execute(
                     text(
@@ -190,6 +192,8 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     refresh_age = None if success is None else (now - success) / MINUTE
     backup = backup_health(path.parent / "backups", now)
     issues = []
+    if any(not i["recovery"] for i in seat_incidents):
+        issues.append("seat_incident_open")
     if notifications:
         issues.append("notification_delivery_pending")
     if heartbeat_age is None or heartbeat_age > 120:
@@ -227,6 +231,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "status": "attention" if issues else "ok",
         "issues": issues,
         "notifications": notifications,
+        "seat_incidents": seat_incidents,
         "evidence": {
             "problem_jobs": [
                 j
@@ -355,6 +360,8 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
 
 
 ISSUE_HELP = {
+    "seat_incident_open": "A screening has failed checks with no later success "
+    "for the same event and start time. See unresolved incidents below.",
     "notification_delivery_pending": "Telegram messages are waiting for delivery. "
     "Delivery details follow; the alert timer retries failures every 15 minutes.",
     "worker_heartbeat_stale": "Worker heartbeat missing or older than 120s. "
@@ -405,6 +412,25 @@ def render(data: dict[str, Any]) -> str:
         lines.append("  No detected problems in the checks below.")
     for issue in data["issues"]:
         lines.append(f"  [{issue}] {ISSUE_HELP[issue]}")
+    active_incidents = [i for i in data.get("seat_incidents", []) if not i["recovery"]]
+    lines.append(f"  Active screening incidents: {len(active_incidents)}")
+    for incident in data.get("seat_incidents", []):
+        recovery = incident["recovery"]
+        if recovery and recovery["attempted_at_ms"] < (
+            datetime.fromisoformat(data["generated_at"]).timestamp() * 1000
+            - data["window_hours"] * 60 * MINUTE
+        ):
+            continue
+        lines.append(
+            f"  {'RECOVERED' if recovery else 'UNRESOLVED'}: "
+            f"{safe_label(incident['title'])} | screening "
+            f"{local_time(incident['starts_at_ms'])}"
+        )
+        lines.append("    Failed: " + local_time(incident["first_failure_ms"]))
+        lines.append(
+            "    Later success: "
+            + (local_time(recovery["attempted_at_ms"]) if recovery else "none observed")
+        )
     for notification in data.get("notifications", []):
         delivery = notification["delivery"]
         lines.extend(
