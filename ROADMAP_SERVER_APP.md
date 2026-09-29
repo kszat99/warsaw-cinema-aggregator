@@ -6,7 +6,7 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
-**Current checkpoint: Kinoteka seats are being collected on the VPS.** A systemd worker plans T-5/T/T+5/T+40 checks from fresh today/tomorrow schedules and stores observations in SQLite. The pilot has successfully fetched counts from the VPS, completed an automatic scheduled check, and survived a service restart without job duplication. See [seat-pilot runbook](docs/seat-pilot.md); run `sudo cinema-pilot-status` on the VPS. Other seat providers remain disabled. Telegram alerts and screening-specific recovery are deployed and verified. Next: independent external heartbeat monitoring; review the first 24 hours before expanding providers individually. This is an isolated pilot, not the completed server app/public website migration. Historical credential rotation remains an owner item if live.
+**Current checkpoint: Kinoteka seats are being collected on the VPS.** A systemd worker plans T-5/T/T+5/T+40 checks from fresh today/tomorrow schedules and stores observations in SQLite. The pilot has successfully fetched counts from the VPS, completed an automatic scheduled check, and survived a service restart without job duplication. See [seat-pilot runbook](docs/seat-pilot.md); run `sudo cinema-pilot-status` on the VPS. Other seat providers remain disabled. Telegram alerts and screening-specific recovery are deployed and verified. External heartbeat sending is deployed (first acknowledgement at 16:52 Warsaw); next: connect Healthchecks Telegram and verify missed-heartbeat/recovery notifications; review the first 24 hours before expanding providers individually. This is an isolated pilot, not the completed server app/public website migration. Historical credential rotation remains an owner item if live.
 
 | Item | Current position |
 |---|---|
@@ -20,8 +20,9 @@ This is the working plan for a maintainable server application and an L2/support
 
 ### Next implementation sessions
 
-1. **Independent outage detection:** choose an external heartbeat service after checking
-   current free-tier limits; send a heartbeat only after successful monitoring work.
+1. **Independent outage detection:** Healthchecks free check selected (15-minute period,
+   10-minute grace). Sender deployed after completed monitoring work, with 30-day local
+   attempt history. Connect external Telegram notifications next.
    Verify missed-heartbeat and recovery notifications without interrupting seat collection.
    Telegram delivery from the VPS cannot report loss of the VPS itself.
 2. **First 24-hour pilot review:** save a short evidence report covering schedule refreshes,
@@ -41,7 +42,7 @@ This is the working plan for a maintainable server application and an L2/support
    freshness/error semantics first; mobile accessibility, usability and privacy-conscious
    visitor analytics remain planned. Public HTTPS and switch-over follow validation.
 
-Current implementation limits: the pilot remains Kinoteka-only; no external monitor,
+Current implementation limits: the pilot remains Kinoteka-only; external notification integration/outage testing still pending,
 no automatic completed-seat-request retry, and no offsite backup yet. Incident reconstruction
 currently scans retained observations; incremental/indexed processing is needed before large
 history/multi-provider scale. The 15-minute Telegram timer controls notification latency.
@@ -555,6 +556,15 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 29, external heartbeat sender deployed (`7421d21`): root-only configuration
+at `/etc/warsaw-cinema/heartbeat.conf`; evaluator checks in only after completing
+monitoring work. HTTP 200 plus exact OK acknowledgement verified live at 16:52 Warsaw.
+Sanitized 30-day delivery attempts are stored in `heartbeat-history.sqlite3` beside
+the pilot database and surfaced in the health report. 105 local tests passed.
+External Telegram integration and controlled missed-heartbeat/recovery notification
+tests remain outstanding; full external monitoring is not yet verified.
+
 
 September 29, notification repair and incident recovery deployed:
 `9dc3036` repairs failed alert/recovery delivery retries and recurring alerts; pending
