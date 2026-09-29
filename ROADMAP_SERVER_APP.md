@@ -18,6 +18,21 @@ This is the working plan for a maintainable server application and an L2/support
 | Architecture | One VPS, FastAPI, SQLite, separate background processes, Nginx, systemd |
 | Current scope | Development API/database/collection plus an isolated Kinoteka seat pilot running on the VPS; public site unchanged |
 
+### Storage/provider preparation checkpoint
+
+Local backup rotation and storage reporting are deployed. Managed copies retain seven
+daily plus four older weekly copies; manual/legacy backups are protected. New backup
+validation precedes pruning. Status selects latest backup by modification time and
+shows DB/backup/disk totals, with low-space and backup-budget warnings. No screening
+or observation retention/deletion has been enabled. Offsite backups remain outstanding.
+
+Cinema City Arkadia readiness probe is implemented but NOT scheduled: September 29
+VPS schedule fetch returned 77 screenings for September 30; the earliest booking
+(Marsupilami 09:00, presentation 1717810) returned HTTP 403 at presentation lookup.
+The probe stopped; counts and overnight collection are not validated for Cinema City.
+Next provider step: investigate that response against the earlier successful transport
+evidence before activation. Do not infer all VPS access is blocked from this one result.
+
 ### Next implementation sessions
 
 1. **Independent outage detection:** Healthchecks free check selected (15-minute period,
@@ -556,6 +571,15 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 29, storage and second-provider preparation: deployed managed backup rotation,
+latest-backup selection fix and disk/backup-budget reporting. First managed backup
+validated at 21:49 Warsaw (397,312 bytes); no legacy/manual files pruned. Added isolated
+Arkadia probe and offline endpoint/URL/count/error fixtures. VPS schedule succeeded
+(77 screenings); presentation request returned 403 and no further booking requests
+were made in that probe. Cinema City remains disabled. Runbook includes exact behavior
+and limits; Kinoteka observations, live website and unrelated local edits preserved.
+
 
 September 29, external heartbeat sender deployed (`7421d21`): root-only configuration
 at `/etc/warsaw-cinema/heartbeat.conf`; evaluator checks in only after completing

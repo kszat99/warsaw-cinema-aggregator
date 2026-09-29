@@ -5,6 +5,33 @@ HTTPS; it never selects, reserves or purchases seats. Other providers remain dis
 
 ## Inspect it
 
+### Storage and backup rotation
+
+The daily backup service now uses `cinema_agg.server.backups`. It validates a new
+SQLite copy before pruning anything, retaining the newest copy on each of seven
+distinct dates plus one copy from each of four older ISO weeks (at most 11 managed
+files). Only exact `managed-backup-<timestamp>.sqlite3` names are pruned; legacy,
+manual, pre-migration, malformed and symlink files are not deleted. Failed backup
+creation never prunes earlier copies. Existing manual copies need operator review
+if they consume too much space; primary screening/seat data is not purged.
+
+Health uses filesystem modification time to choose the latest backup, avoiding
+alphabetical precedence of `backup-pre-*`. Status shows database bytes, backup
+total/count and free/total disk. Warnings trigger below 15% free or 1 GiB free, and
+when local backups exceed an initial 2 GiB budget. The budget warns; it never deletes
+protected copies or the live database. This is local retention, not offsite backup.
+
+### Cinema City readiness (not scheduled)
+
+`python -m cinema_agg.server.cinema_city_probe` fetches tomorrow's Arkadia schedule,
+selects the earliest screening and attempts the read-only presentation/layout/status
+flow. It neither inserts jobs in the Kinoteka database nor enables another worker.
+It stops on 403/429, uses validated booking origins and does not classify generic
+HTTP errors or empty maps as confirmed closure. Layout/status cardinalities must match.
+September 29 VPS result: 77 September 30 screenings fetched; Marsupilami at 09:00
+(`1717810`) returned 403 at the presentation step. No seat counts were obtained.
+Unattended Cinema City remains disabled until a reviewed VPS readiness check succeeds.
+
 `cinema-pilot-status` and `cinema-pilot-health` now show the same full report.
 WHY THIS STATUS explains every warning first. All affected jobs and failed scheduled
 attempts in the selected window follow, even when older than the five recent results.

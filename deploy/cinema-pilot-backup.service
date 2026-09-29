@@ -6,7 +6,7 @@ Type=oneshot
 User=cinema-pilot
 Group=cinema-pilot
 Environment=CINEMA_API_DATABASE_PATH=/var/lib/cinema-pilot/cinema.sqlite3
-ExecStart=/opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.seat_pilot backup
+ExecStart=/opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.backups
 StateDirectory=cinema-pilot
 UMask=0077
 NoNewPrivileges=true

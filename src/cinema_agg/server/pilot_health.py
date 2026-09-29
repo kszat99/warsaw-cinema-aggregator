@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import shutil
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
+from .backups import candidates
 from .database import database_engine, require_schema
 from .heartbeat import latest_heartbeat
 from .seat_incidents import incidents
@@ -19,10 +21,10 @@ MINUTE = 60_000
 
 
 def backup_health(folder: Path, now: int) -> dict[str, Any]:
-    files = sorted(folder.glob("backup-*.sqlite3"))
+    files = candidates(folder)
     if not files:
         return {"status": "missing", "age_minutes": None}
-    latest = files[-1]
+    latest = max(files, key=lambda p: (p.stat().st_mtime_ns, p.name))
     age = (now - int(latest.stat().st_mtime * 1000)) / MINUTE
     try:
         with sqlite3.connect(latest.resolve().as_uri() + "?mode=ro", uri=True) as db:
@@ -202,8 +204,21 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     )
     refresh_age = None if success is None else (now - success) / MINUTE
     backup = backup_health(path.parent / "backups", now)
+    disk = shutil.disk_usage(path.parent)
+    backup_files = candidates(path.parent / "backups")
+    storage = {
+        "database_bytes": path.stat().st_size,
+        "backup_bytes": sum(p.stat().st_size for p in backup_files),
+        "backup_files": len(backup_files),
+        "disk_free_bytes": disk.free,
+        "disk_total_bytes": disk.total,
+    }
     heartbeat = latest_heartbeat(path)
     issues = []
+    if disk.free < max(1024**3, disk.total * 0.15):
+        issues.append("disk_space_low")
+    if storage["backup_bytes"] > 2 * 1024**3:
+        issues.append("backup_storage_budget")
     if heartbeat and (
         heartbeat["outcome"] != "acknowledged"
         or now - heartbeat["attempted_ms"] > 25 * MINUTE
@@ -248,6 +263,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "status": "attention" if issues else "ok",
         "issues": issues,
         "notifications": notifications,
+        "storage": storage,
         "external_heartbeat": heartbeat,
         "seat_incidents": seat_incidents,
         "evidence": {
@@ -355,12 +371,12 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             recovery = job["later_recovery"]
             if recovery:
                 kind = (
-                    "retry of the same job" if recovery["job_id"] == job["job_id"]
+                    "retry of the same job"
+                    if recovery["job_id"] == job["job_id"]
                     else f"separate scheduled T{recovery['offset_minutes']:+d}m check"
                 )
                 lines.append(
-                    f"    RECOVERED: {local_time(recovery['attempted_at_ms'])} "
-                    f"({kind})"
+                    f"    RECOVERED: {local_time(recovery['attempted_at_ms'])} ({kind})"
                 )
                 lines.append(
                     f"    Later seats: {recovery['available']} available / "
@@ -400,6 +416,10 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
 
 
 ISSUE_HELP = {
+    "disk_space_low": "Free disk is below 15% or 1 GiB. Review storage totals below; "
+    "do not delete the live database to free space.",
+    "backup_storage_budget": "Local backups exceed the initial 2 GiB budget. "
+    "Review manual copies and retention; budget is a warning, not destructive pruning.",
     "external_heartbeat_failed_or_stale": "External heartbeat failed or is older "
     "than 25 minutes. See heartbeat details; inspect cinema-pilot-alerts logs.",
     "seat_incident_open": "A screening has failed checks with no later success "
@@ -454,6 +474,17 @@ def render(data: dict[str, Any]) -> str:
         lines.append("  No detected problems in the checks below.")
     for issue in data["issues"]:
         lines.append(f"  [{issue}] {ISSUE_HELP[issue]}")
+    storage = data.get("storage")
+    if storage:
+        lines.append(
+            f"  Storage: database {storage['database_bytes'] / 1024**2:.2f} MiB | "
+            f"{storage['backup_files']} backups "
+            f"{storage['backup_bytes'] / 1024**2:.2f} MiB"
+        )
+        lines.append(
+            f"  Disk free: {storage['disk_free_bytes'] / 1024**3:.2f} / "
+            f"{storage['disk_total_bytes'] / 1024**3:.2f} GiB"
+        )
     heartbeat = data.get("external_heartbeat")
     if heartbeat:
         lines.append(
