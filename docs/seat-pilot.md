@@ -10,6 +10,9 @@ WHY THIS STATUS explains every warning first. All affected jobs and failed sched
 attempts in the selected window follow, even when older than the five recent results.
 Records show film, screening/planned/attempted/finished times in Warsaw, delay,
 deadline, result, HTTP status, counts and correlation IDs. Next checks appear last.
+Each failed scheduled attempt also shows its later recovery timestamp and counts,
+or UNRESOLVED. Recovery identifies whether the success was a retry of the same job
+or a separate scheduled check; it never fills in the original missing snapshot.
 Manual diagnostics are labelled explicitly, never as a screening-time check.
 Never-attempted jobs have no counts; their startup cause cannot be inferred reliably
 because the original database did not record why the attempt was skipped.

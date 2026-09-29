@@ -173,6 +173,16 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     finally:
         engine.dispose()
     excluded = {"superseded", "identity_conflict"}
+    recovery_by_attempt = {
+        attempt_id: incident["recovery"]
+        for incident in seat_incidents
+        for attempt_id in incident["failed_attempt_ids"]
+    }
+    for attempt_row in attempts:
+        if attempt_row["attempt_id"] in recovery_by_attempt:
+            attempt_row["later_recovery"] = recovery_by_attempt[
+                attempt_row["attempt_id"]
+            ]
     eligible = [j for j in jobs if j["state"] not in excluded]
     settled = [j for j in eligible if j["deadline_ms"] < now]
     completed = sum(j["success_at"] is not None for j in settled)
@@ -341,6 +351,28 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             lines.append("    Seats: unknown (no valid counts from this attempt)")
         lines.append(f"    Job: {job['job_id']}")
         lines.append(f"    Attempt ID: {job['attempt_id']}")
+        if "later_recovery" in job:
+            recovery = job["later_recovery"]
+            if recovery:
+                kind = (
+                    "retry of the same job" if recovery["job_id"] == job["job_id"]
+                    else f"separate scheduled T{recovery['offset_minutes']:+d}m check"
+                )
+                lines.append(
+                    f"    RECOVERED: {local_time(recovery['attempted_at_ms'])} "
+                    f"({kind})"
+                )
+                lines.append(
+                    f"    Later seats: {recovery['available']} available / "
+                    f"{recovery['unavailable']} unavailable / "
+                    f"{recovery['capacity']} capacity"
+                )
+                lines.append("    Original failed snapshot remains missing.")
+            else:
+                lines.append(
+                    "    UNRESOLVED: no later successful scheduled check "
+                    "for this screening."
+                )
     else:
         actual = job.get("first_attempt")
         lines.append(

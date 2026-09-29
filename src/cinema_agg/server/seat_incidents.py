@@ -9,6 +9,7 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
     rows = connection.execute(
         text(
             "SELECT j.provider_cinema,j.cinema_event,j.starts_at_ms,j.title,"
+            "j.id AS job_id,j.offset_minutes,"
             "o.id,o.attempted_at_ms,o.finished_at_ms,o.outcome,o.available,"
             "o.unavailable,o.capacity FROM seat_observations o "
             "JOIN seat_jobs j ON j.id=o.job_id WHERE j.purpose='scheduled' "
@@ -35,11 +36,13 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
                 "last_failure_ms": row["attempted_at_ms"],
                 "last_outcome": row["outcome"],
                 "failures": 0,
+                "failed_attempt_ids": [],
                 "recovery": None,
             }
             active[key] = incident
             result.append(incident)
         active[key]["failures"] += 1
+        active[key]["failed_attempt_ids"].append(row["id"])
         active[key]["last_failure_ms"] = row["attempted_at_ms"]
         active[key]["last_outcome"] = row["outcome"]
     return result

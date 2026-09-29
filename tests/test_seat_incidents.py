@@ -1,7 +1,7 @@
 from sqlalchemy import text
 
 from cinema_agg.server import alerts
-from cinema_agg.server.pilot_health import report
+from cinema_agg.server.pilot_health import report, job_lines
 from cinema_agg.server.seat_pilot import claim, finish, plan, MINUTE
 from cinema_agg.server.settings import Settings
 from test_seat_pilot import NOW, engine  # noqa: F401
@@ -26,6 +26,12 @@ def test_same_screening_recovery_summary_and_recurrence(engine, tmp_path, monkey
     assert 'seat_errors_in_window' in data['issues']
     assert 'seat_incident_open' not in data['issues']
     assert data['seat_incidents'][0]['recovery']['available'] == 20
+    failed = data['evidence']['failed_attempts'][0]
+    detail = '\n'.join(job_lines(failed, attempt=True))
+    assert 'RECOVERED:' in detail
+    assert 'separate scheduled T+0m check' in detail
+    assert '20 available / 5 unavailable / 25 capacity' in detail
+    assert 'Original failed snapshot remains missing' in detail
     # Isolate incident notifications from fixture's missing refresh/backup warnings.
     original = alerts.report
     monkeypatch.setattr(alerts, 'report', lambda *a, **k: {
@@ -55,6 +61,8 @@ def test_other_screening_success_does_not_resolve(engine, tmp_path):
     data = report(tmp_path/'seats.sqlite3', NOW+6*MINUTE)
     assert data['seat_incidents'][0]['recovery'] is None
     assert 'seat_incident_open' in data['issues']
+    detail = '\n'.join(job_lines(data['evidence']['failed_attempts'][0], attempt=True))
+    assert 'UNRESOLVED:' in detail
 
 
 def test_notified_failure_recovers_and_failed_recovery_delivery_retries(engine, tmp_path, monkeypatch):
