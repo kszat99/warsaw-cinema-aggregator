@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
 from .database import database_engine, require_schema
+from .heartbeat import latest_heartbeat
 from .seat_incidents import incidents
 from .settings import Settings
 
@@ -191,7 +192,13 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     )
     refresh_age = None if success is None else (now - success) / MINUTE
     backup = backup_health(path.parent / "backups", now)
+    heartbeat = latest_heartbeat(path)
     issues = []
+    if heartbeat and (
+        heartbeat["outcome"] != "acknowledged"
+        or now - heartbeat["attempted_ms"] > 25 * MINUTE
+    ):
+        issues.append("external_heartbeat_failed_or_stale")
     if any(not i["recovery"] for i in seat_incidents):
         issues.append("seat_incident_open")
     if notifications:
@@ -231,6 +238,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "status": "attention" if issues else "ok",
         "issues": issues,
         "notifications": notifications,
+        "external_heartbeat": heartbeat,
         "seat_incidents": seat_incidents,
         "evidence": {
             "problem_jobs": [
@@ -360,6 +368,8 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
 
 
 ISSUE_HELP = {
+    "external_heartbeat_failed_or_stale": "External heartbeat failed or is older "
+    "than 25 minutes. See heartbeat details; inspect cinema-pilot-alerts logs.",
     "seat_incident_open": "A screening has failed checks with no later success "
     "for the same event and start time. See unresolved incidents below.",
     "notification_delivery_pending": "Telegram messages are waiting for delivery. "
@@ -412,6 +422,15 @@ def render(data: dict[str, Any]) -> str:
         lines.append("  No detected problems in the checks below.")
     for issue in data["issues"]:
         lines.append(f"  [{issue}] {ISSUE_HELP[issue]}")
+    heartbeat = data.get("external_heartbeat")
+    if heartbeat:
+        lines.append(
+            f"  External heartbeat: {heartbeat['outcome']} | "
+            f"attempt {local_time(heartbeat['attempted_ms'])} | "
+            f"HTTP {heartbeat['http_status']}"
+        )
+    else:
+        lines.append("  External heartbeat: no local attempts recorded")
     active_incidents = [i for i in data.get("seat_incidents", []) if not i["recovery"]]
     lines.append(f"  Active screening incidents: {len(active_incidents)}")
     for incident in data.get("seat_incidents", []):

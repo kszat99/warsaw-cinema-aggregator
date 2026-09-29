@@ -40,7 +40,31 @@ The report is on demand. Telegram notifications are evaluated by
 `cinema-pilot-alerts.timer` every 15 minutes; independent external outage monitoring
 is still outstanding. Reports never select/reserve seats or change collection state.
 
-### Notification delivery and retries
+### External evaluator heartbeat
+
+The alerts service loads root-owned mode-600 `/etc/warsaw-cinema/heartbeat.conf`
+with `CINEMA_HEARTBEAT_URL`. Only a verified HTTPS `hc-ping.com/<UUID>` success
+endpoint is accepted; redirects are disabled. After successful alert evaluation,
+one GET is sent with a five-second timeout. Acknowledgement requires HTTP 200 and
+the exact body `OK`; Healthchecks can return HTTP 200 for ignored/not-found pings.
+Cinema health warnings do not suppress check-ins. Evaluation crashes do suppress
+them. Missing configuration disables the optional sender; missing check-ins are
+detected externally once the check has been activated.
+
+Configure the external check for 15 minutes plus a 10-minute grace period. The
+external Telegram integration and a controlled outage/recovery notification test
+must be verified separately; an acknowledged ping alone does not prove alerts work.
+Monitoring is passive: no seat collection is stopped to test a check-in.
+
+Local attempts are stored in `/var/lib/cinema-pilot/heartbeat-history.sqlite3`, a
+separate small SQLite diagnostics file, with attempted/finished times, outcome and
+HTTP status. A pre-request `started` row preserves evidence if the process dies.
+Rows older than 30 days are pruned on sending. The URL and response text are never
+stored/logged. This disposable history is outside the primary database backup;
+it records our delivery attempts, not authoritative uptime. The normal status report
+shows its latest attempt and flags failed/stale attempts (over 25 minutes).
+
+### Telegram delivery
 
 Seat failures now use screening-specific incidents (provider cinema ID, event ID
 and exact start time). Consecutive failed scheduled attempts belong to one incident;

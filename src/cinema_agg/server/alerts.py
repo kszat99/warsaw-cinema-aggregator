@@ -10,6 +10,7 @@ import httpx
 from sqlalchemy import text
 
 from .database import database_engine, require_schema
+from .heartbeat import send_heartbeat
 from .pilot_health import ISSUE_HELP, local_time, report, safe_label
 from .seat_incidents import incident_message
 from .settings import Settings
@@ -245,6 +246,8 @@ def main() -> None:
                 int(datetime.now(UTC).timestamp() * 1000),
                 settings,
             )
+            if not send_heartbeat(settings.database_path):
+                raise RuntimeError("Heartbeat delivery failed")
     except Exception as error:
         # Never put raw exceptions, URLs or credentials into logs or Telegram.
         print(
