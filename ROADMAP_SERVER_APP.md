@@ -6,7 +6,7 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
-**Current checkpoint: Kinoteka seats are being collected on the VPS.** A systemd worker plans T-5/T/T+5/T+40 checks from fresh today/tomorrow schedules and stores observations in SQLite. The pilot has successfully fetched counts from the VPS, completed an automatic scheduled check, and survived a service restart without job duplication. See [seat-pilot runbook](docs/seat-pilot.md); run `sudo cinema-pilot-status` on the VPS. Other seat providers remain disabled. Next: review a day of real timing/count/failure data, then expand providers individually. This is an isolated pilot, not the completed server app/public website migration. Historical credential rotation remains an owner item if live.
+**Current checkpoint: Kinoteka seats are being collected on the VPS.** A systemd worker plans T-5/T/T+5/T+40 checks from fresh today/tomorrow schedules and stores observations in SQLite. The pilot has successfully fetched counts from the VPS, completed an automatic scheduled check, and survived a service restart without job duplication. See [seat-pilot runbook](docs/seat-pilot.md); run `sudo cinema-pilot-status` on the VPS. Other seat providers remain disabled. Telegram alerts and screening-specific recovery are deployed and verified. Next: independent external heartbeat monitoring; review the first 24 hours before expanding providers individually. This is an isolated pilot, not the completed server app/public website migration. Historical credential rotation remains an owner item if live.
 
 | Item | Current position |
 |---|---|
@@ -14,16 +14,44 @@ This is the working plan for a maintainable server application and an L2/support
 | Seat research | Experimental probes and recorded cutoff observations |
 | VPS | OVH VPS-1, reported 2 vCPU / 4 GB RAM / 40 GB storage; Ubuntu installed |
 | VPS evidence | User-reported September 27 smoke results returned counts for 19 sampled cinemas across seven booking platforms |
-| Still unproven | Sustained load, fresh-session timings, secure unattended operation, restoration and alert delivery |
+| Still unproven | Sustained multi-provider load, remaining fresh-session timings, complete host hardening, offsite restoration and independent outage detection |
 | Architecture | One VPS, FastAPI, SQLite, separate background processes, Nginx, systemd |
 | Current scope | Development API/database/collection plus an isolated Kinoteka seat pilot running on the VPS; public site unchanged |
+
+### Next implementation sessions
+
+1. **Independent outage detection:** choose an external heartbeat service after checking
+   current free-tier limits; send a heartbeat only after successful monitoring work.
+   Verify missed-heartbeat and recovery notifications without interrupting seat collection.
+   Telegram delivery from the VPS cannot report loss of the VPS itself.
+2. **First 24-hour pilot review:** save a short evidence report covering schedule refreshes,
+   due/successful/missed/late checks, transient failures, recovered incidents, notification
+   delivery and overnight backup. Separate the three known startup misses from later misses.
+   This review gates provider expansion, not all parallel development.
+3. **Bounded transient seat retries:** design one delayed retry for network errors/timeouts
+   inside the original deadline and request budget. Preserve both attempts and actual times;
+   do not retry confirmed closure, parser errors or bot challenges blindly. Currently only
+   notification delivery retries; completed seat network errors do not retry automatically.
+4. **Broaden collection one provider at a time:** validate fresh schedules, identity, seat
+   counts, TLS, browser resource usage and timings on the VPS before enabling each provider.
+   Measure bursts before increasing concurrency; keep the legacy site operational.
+5. **Finish unattended-operation safeguards alongside expansion:** review exposed ports and
+   host security, choose offsite backup storage/retention and verify an independent restore.
+6. **Serve observations through the API, then integrate the frontend:** timestamps and
+   freshness/error semantics first; mobile accessibility, usability and privacy-conscious
+   visitor analytics remain planned. Public HTTPS and switch-over follow validation.
+
+Current implementation limits: the pilot remains Kinoteka-only; no external monitor,
+no automatic completed-seat-request retry, and no offsite backup yet. Incident reconstruction
+currently scans retained observations; incremental/indexed processing is needed before large
+history/multi-provider scale. The 15-minute Telegram timer controls notification latency.
 
 ### Keep the existing site operational during development
 
 - Development checkout: this repository folder, branch `codex/server-app`; roadmap/server-app edits remain separate from production.
 - Live checkout: `C:/Users/Kacper Szatkowski/.codex/worktrees/cinema-live-maintenance/warsaw-cinema-aggregator`, branch `main`, with its own Python environment. **Do not archive this worktree or switch its branch while the daily refresh task uses it.**
 - The existing Windows task retains its registered launcher path because Windows denied changing the task definition. The launcher reads `%LOCALAPPDATA%/WarsawCinemaAggregator/live_checkout.txt` and delegates to the live checkout before loading application code. Preserve this routing behavior when editing development scripts; an administrator can later point the task directly to the live checkout.
-- Daily fetching/publishing still uses the original frontend/adapters. Only explicitly reviewed maintenance fixes and generated data go to `main`; the server-app work is not deployed.
+- Daily fetching/publishing still uses the original frontend/adapters. Only explicitly reviewed maintenance fixes and generated data go to `main`; the full server-app website is not deployed; only the isolated Kinoteka background pilot runs on the VPS.
 - Refresh transcripts: `%LOCALAPPDATA%/WarsawCinemaAggregator/logs`. A successful local push triggers the existing Pages deployment; check that deployment separately.
 
 After each implementation session, update the phase status and handover log: completed work, exact commit, checks performed, remaining issue, and next small step. Record local and VPS status separately. Code existing is not enough to mark a phase complete.
@@ -450,11 +478,14 @@ recent-results limit. Startup causes are not inferred from absent attempts.
 Implemented pilot subset: `sudo cinema-pilot-health` produces a read-only rolling
 health report (text/JSON), covering refresh counts/freshness, worker heartbeat,
 scheduled observation coverage/errors/delay and local backup checks. Startup misses
-remain explicit. Next: select a notification destination, persist deduplicated alert
-and recovery state, and configure an independent VPS heartbeat monitor.
+remain explicit. Telegram is configured on the VPS with durable delivery retries,
+deduplication and screening-specific recovery. Next: independent external heartbeat
+monitoring, followed by a controlled outage/recovery exercise.
 
 - [ ] Versioned contracts, pagination/caching, safe status and private reports.
-- [ ] Complete deduplicated alerts/recovery and progress/backup checks. Configure/test outbound task heartbeats with an independent monitor; prepare public HTTPS checks for Phase 8 without exposing Uvicorn.
+- [x] Pilot health report and Telegram delivery: pending/open/resolved states, retries, sanitized delivery errors and recurrence handling.
+- [x] Seat incident recovery requires a later successful scheduled check for the same cinema/event/start time; retain historical failures and combine failure/recovery notifications when appropriate.
+- [ ] Configure/test an independent heartbeat monitor for VPS/evaluator outages; prepare public HTTPS checks for Phase 8 without exposing Uvicorn.
 - [ ] Test DB outage, upstream outage, stale data and concurrent load; test notification and recovery delivery.
 
 **Done:** API never causes cinema calls, failures remain distinguishable, owner can diagnose one cinema from report/log IDs. Save contract/load/alert proof.
@@ -517,13 +548,30 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Choice still needed | When / default |
 |---|---|
 | Domain/DNS | Before Phase 8; frontend/API together; record renewal cost |
-| Owner alert channel | Before Phase 3 pilot; one email/webhook destination |
+| Owner alert channel | Telegram configured and live delivery verified; external monitor destination still to configure |
 | External monitor | Before Phase 6; verify current quota/cost |
 | Independent backup destination | Phase 2, before important seat history accumulates |
 | Retention/request budgets | Initial proposals above, revised from pilot measurements |
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 29, notification repair and incident recovery deployed:
+`9dc3036` repairs failed alert/recovery delivery retries and recurring alerts; pending
+messages and sanitized delivery failures are visible in the status report. Live retry of
+an undelivered seat-error alert succeeded. `b72a3c5` separates screening incidents from
+rolling historical statistics: only a later success for the same cinema/event/start resolves
+an incident; another screening or age-out cannot. An already-recovered incident sends one
+combined summary, with durable retry on delivery failure. The former aggregate seat-error
+alert is superseded. Zaproszenie 13:15 failed at 13:15:03, but 13:10, 13:20 and 13:55 checks
+returned 289 available / 3 unavailable / 292 capacity. Recovery uses the 13:20 success;
+Telegram acknowledged the recovery notification at 15:41 Warsaw. The failed snapshot remains
+missing. 95 tests and all GitHub CI jobs passed; worker and alert timer remained active.
+Other agent's roadmap notes retained, with the external-monitor checkbox separated from
+completed Telegram work. No expansion of seat providers or public-site migration performed.
+
+
+September 29, VPS alerts deployed: `cinema-pilot-alerts` timer added (15m interval) with Telegram integration. Deduplicated `alert_state` table created (Migration 0004). Alerts config locked down at `/etc/warsaw-cinema/alerts.conf`. Tested successfully on VPS; automatically reported `missed_jobs_in_window` due to morning startup misses. Worker shutdown skeleton and external uptime monitor still pending for Phase 1/6 completion.
 
 September 29, VPS pilot deployed: `/opt/cinema-pilot`, isolated user `cinema-pilot`,
 SQLite `/var/lib/cinema-pilot/cinema.sqlite3`. systemd seat worker plus six-hour
