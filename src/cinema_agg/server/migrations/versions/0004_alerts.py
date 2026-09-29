@@ -12,7 +12,7 @@ def upgrade() -> None:
     op.create_table(
         "alert_state",
         sa.Column("fingerprint", sa.String(128), primary_key=True),
-        sa.Column("state", sa.String(30), nullable=False),  # 'open', 'resolved', 'suppressed'
+        sa.Column("state", sa.String(30), nullable=False),
         sa.Column("first_seen_ms", sa.BigInteger(), nullable=False),
         sa.Column("last_seen_ms", sa.BigInteger(), nullable=False),
         sa.Column("last_notified_ms", sa.BigInteger(), nullable=False),

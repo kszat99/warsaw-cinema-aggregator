@@ -36,8 +36,46 @@ hours, running refresh over ten minutes, and missing/invalid/backups over 26 hou
 Backup validation is a SQLite quick check, not an independent recovery guarantee.
 Exit codes: 0 healthy, 1 attention (including historical errors in the window),
 2 report unavailable. No jobs due is not an error if heartbeat/refresh/backup are fresh.
-This is an on-demand report; outbound notifications and external outage monitoring
-are not configured yet. Reports never select/reserve seats or change collection state.
+The report is on demand. Telegram notifications are evaluated by
+`cinema-pilot-alerts.timer` every 15 minutes; independent external outage monitoring
+is still outstanding. Reports never select/reserve seats or change collection state.
+
+### Notification delivery and retries
+
+`alert_state` now distinguishes `pending_open`, `open` (delivered),
+`pending_resolved`, and `resolved` (clearance delivered). Legacy open records with
+no successful notification are retried automatically. Recurrences reuse the issue
+row with a new pending transition instead of inserting a duplicate primary key.
+Failed deliveries retain a sanitized error category and next retry time in SQLite;
+the status report shows pending deliveries. At most two messages are attempted per
+evaluation, with a 15-minute minimum wait after failure. No reminders are sent for
+unchanged delivered incidents. Plain text avoids provider titles breaking Markdown.
+All operational evaluations use the module CLI, whose OS file lock prevents overlap.
+Network delivery happens outside database transactions. Successful HTTP responses
+must also contain Telegram `ok: true`; raw responses, URLs and exceptions are not logged.
+The existing `evidence` JSON holds delivery metadata; `suppress_until_ms` is used as
+the delivery retry timestamp. Operator maintenance suppression is not implemented.
+If a send succeeds but the process dies before recording acknowledgement, a duplicate
+may occur on retry (at-least-once delivery). A report/database failure exits nonzero
+with a sanitized log; external monitoring is still needed to detect total outages.
+Clearance means the condition left the report, including historical records aging
+out of its 24-hour window; it does not by itself prove a new successful cinema request.
+
+Inspect evaluator runs without exposing its credential configuration:
+
+```sh
+sudo journalctl -u cinema-pilot-alerts -n 30 --no-pager
+systemctl list-timers cinema-pilot-alerts.timer
+```
+
+### Seat request failures
+
+A `network_error` is one failed attempt, with unknown counts. It does not erase
+earlier observations or stop the next scheduled check. Completed network-error and
+timeout attempts currently have no automatic retry; expired interrupted claims may
+be reclaimed only within their two-minute window. Later T+5/T+40 observations are
+separate checks, not retries. Preserve the failed timestamp rather than filling it
+with counts from a different time. A bounded transient-error retry remains future work.
 
 In the VPS SSH terminal:
 

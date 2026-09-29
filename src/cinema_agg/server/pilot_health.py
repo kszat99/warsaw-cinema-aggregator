@@ -152,6 +152,21 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
             last_finished = db.execute(
                 text("SELECT max(finished_at_ms) FROM seat_observations")
             ).scalar()
+            notifications = [
+                dict(row)
+                for row in db.execute(
+                    text(
+                        "SELECT fingerprint,state,last_notified_ms,"
+                        "suppress_until_ms,evidence "
+                        "FROM alert_state WHERE state IN ('pending_open',"
+                        "'pending_resolved') "
+                        "OR (state='open' AND last_notified_ms=0) ORDER BY fingerprint"
+                    )
+                ).mappings()
+            ]
+            for notification in notifications:
+                evidence = json.loads(notification.pop("evidence") or "{}")
+                notification["delivery"] = evidence.get("delivery", {})
     finally:
         engine.dispose()
     excluded = {"superseded", "identity_conflict"}
@@ -175,6 +190,8 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     refresh_age = None if success is None else (now - success) / MINUTE
     backup = backup_health(path.parent / "backups", now)
     issues = []
+    if notifications:
+        issues.append("notification_delivery_pending")
     if heartbeat_age is None or heartbeat_age > 120:
         issues.append("worker_heartbeat_stale")
     if refresh_age is None or refresh_age > 7 * 60:
@@ -209,6 +226,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "window_hours": hours,
         "status": "attention" if issues else "ok",
         "issues": issues,
+        "notifications": notifications,
         "evidence": {
             "problem_jobs": [
                 j
@@ -337,6 +355,8 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
 
 
 ISSUE_HELP = {
+    "notification_delivery_pending": "Telegram messages are waiting for delivery. "
+    "Delivery details follow; the alert timer retries failures every 15 minutes.",
     "worker_heartbeat_stale": "Worker heartbeat missing or older than 120s. "
     "Check: sudo journalctl -u cinema-seat-pilot -n 30 --no-pager",
     "schedule_refresh_stale": "No complete refresh in 7 hours. "
@@ -385,6 +405,23 @@ def render(data: dict[str, Any]) -> str:
         lines.append("  No detected problems in the checks below.")
     for issue in data["issues"]:
         lines.append(f"  [{issue}] {ISSUE_HELP[issue]}")
+    for notification in data.get("notifications", []):
+        delivery = notification["delivery"]
+        lines.extend(
+            [
+                f"  Telegram: {notification['fingerprint']} | {notification['state']}",
+                f"    Last successful delivery: "
+                f"{local_time(notification['last_notified_ms'])}",
+                f"    Last try: {local_time(delivery.get('attempted_at_ms'))} | "
+                f"error: {delivery.get('error') or 'not recorded'}",
+                "    Retry eligible: "
+                + (
+                    local_time(notification["suppress_until_ms"])
+                    if notification["suppress_until_ms"]
+                    else "next alert timer run"
+                ),
+            ]
+        )
     if evidence["problem_jobs"]:
         lines.append(
             "\nAFFECTED JOBS (all in window; not hidden by recent-result limit)"
