@@ -23,4 +23,5 @@ install -m 0644 "$upload"/cinema-*.service "$upload"/cinema-*.timer /etc/systemd
 systemctl daemon-reload
 systemd-analyze verify /etc/systemd/system/cinema-seat-pilot.service /etc/systemd/system/cinema-pilot-refresh.service /etc/systemd/system/cinema-pilot-refresh.timer /etc/systemd/system/cinema-pilot-backup.service /etc/systemd/system/cinema-pilot-backup.timer
 install -m 0755 "$upload/cinema-pilot-status" /usr/local/bin/cinema-pilot-status
+install -m 0755 "$upload/cinema-pilot-health" /usr/local/bin/cinema-pilot-health
 echo 'Installed, migrated and verified. Services are not enabled yet.'

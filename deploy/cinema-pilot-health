@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec /opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.pilot_health --database /var/lib/cinema-pilot/cinema.sqlite3 "$@"

@@ -442,6 +442,12 @@ provider-specific completeness and long-running validation remain required.
 
 ### Phase 6 — API and operational visibility
 
+Implemented pilot subset: `sudo cinema-pilot-health` produces a read-only rolling
+health report (text/JSON), covering refresh counts/freshness, worker heartbeat,
+scheduled observation coverage/errors/delay and local backup checks. Startup misses
+remain explicit. Next: select a notification destination, persist deduplicated alert
+and recovery state, and configure an independent VPS heartbeat monitor.
+
 - [ ] Versioned contracts, pagination/caching, safe status and private reports.
 - [ ] Complete deduplicated alerts/recovery and progress/backup checks. Configure/test outbound task heartbeats with an independent monitor; prepare public HTTPS checks for Phase 8 without exposing Uvicorn.
 - [ ] Test DB outage, upstream outage, stale data and concurrent load; test notification and recovery delivery.

@@ -5,6 +5,28 @@ HTTPS; it never selects, reserves or purchases seats. Other providers remain dis
 
 ## Inspect it
 
+Health report (read-only, no cinema requests):
+
+```sh
+sudo cinema-pilot-health
+sudo cinema-pilot-health --json
+```
+
+Defaults to a rolling 24 hours; `--hours 48` expands the window (maximum 168).
+Reports heartbeat age, last complete refresh and per-date current/previous counts,
+seat coverage, failed attempts, missed/overdue jobs, maximum start delay and local
+backup age/integrity. Coverage uses scheduled jobs whose two-minute window has
+finished; excludes diagnostics, future jobs, superseded jobs and identity conflicts.
+Identity conflicts are still flagged separately. Startup misses remain visible;
+there is no persisted startup baseline to classify them automatically.
+The report flags heartbeat age over two minutes, no complete refresh within seven
+hours, running refresh over ten minutes, and missing/invalid/backups over 26 hours.
+Backup validation is a SQLite quick check, not an independent recovery guarantee.
+Exit codes: 0 healthy, 1 attention (including historical errors in the window),
+2 report unavailable. No jobs due is not an error if heartbeat/refresh/backup are fresh.
+This is an on-demand report; outbound notifications and external outage monitoring
+are not configured yet. Reports never select/reserve seats or change collection state.
+
 In the VPS SSH terminal:
 
 ```sh
