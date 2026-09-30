@@ -14,6 +14,7 @@ from sqlalchemy import text
 from .backups import candidates
 from .database import database_engine, require_schema
 from .heartbeat import latest_heartbeat
+from .offsite import health as offsite_health
 from .seat_incidents import incidents
 from .seat_providers import NAMES, cinema_name
 from .settings import Settings
@@ -241,7 +242,10 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "disk_total_bytes": disk.total,
     }
     heartbeat = latest_heartbeat(path)
+    offsite = offsite_health(path, now)
     issues = []
+    if offsite["status"] not in {"ok", "not_configured"}:
+        issues.append("offsite_backup_attention")
     if disk.free < max(1024**3, disk.total * 0.15):
         issues.append("disk_space_low")
     if storage["backup_bytes"] > 2 * 1024**3:
@@ -314,6 +318,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "notifications": notifications,
         "storage": storage,
         "external_heartbeat": heartbeat,
+        "offsite_backup": offsite,
         "seat_incidents": seat_incidents,
         "evidence": {
             "problem_jobs": [
@@ -493,6 +498,8 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
 
 
 ISSUE_HELP = {
+    "offsite_backup_attention": "Offsite backup failed, is stale/missing, or exceeds "
+    "its storage warning. See offsite status and last verified restore below.",
     "disk_space_low": "Free disk is below 15% or 1 GiB. Review storage totals below; "
     "do not delete the live database to free space.",
     "backup_storage_budget": "Local backups exceed the initial 2 GiB budget. "
@@ -568,6 +575,23 @@ def render(data: dict[str, Any]) -> str:
             f"{local_time(provider['cooldown_until_ms'])}"
         )
     heartbeat = data.get("external_heartbeat")
+    offsite = data.get("offsite_backup", {})
+    lines.append(
+        f"  Offsite backup: {offsite.get('status', 'not_configured')} | "
+        f"phase {offsite.get('phase', 'none')}"
+    )
+    if offsite.get("last_success_ms"):
+        lines.append(
+            "    Last verified upload/restore: "
+            + local_time(offsite["last_success_ms"])
+        )
+    if offsite.get("stored_bytes") is not None:
+        lines.append(
+            f"    B2 bucket storage (including hidden versions): "
+            f"{offsite['stored_bytes'] / 1024**2:.2f} MiB"
+        )
+    if offsite.get("error_type") and offsite.get("outcome") != "success":
+        lines.append(f"    Offsite error: {safe_label(offsite['error_type'])}")
     if heartbeat:
         lines.append(
             f"  External heartbeat: {heartbeat['outcome']} | "

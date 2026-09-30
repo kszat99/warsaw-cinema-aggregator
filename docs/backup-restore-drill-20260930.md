@@ -29,7 +29,7 @@ This demonstrates recovery of database/application reads and planner state on an
 machine. It does not prove a full replacement-server deployment, automatic offsite
 uploads, restoration of credentials or a cloud-download recovery procedure.
 
-## Offsite destination recommendation
+## Offsite destination recommendation (historical proposal)
 
 Owner requested a free option. Recommend Backblaze B2, pending owner account creation:
 
@@ -47,3 +47,7 @@ secret also saved outside the VPS, scheduled uploads, bounded retention/storage 
 and failed/stale upload alerts. Validate upload and download/restore before marking
 offsite protection complete. Select tooling during implementation; no cloud credentials
 or bucket are configured yet and no upload service is enabled.
+
+Update, September 30 at 17:25 Warsaw: account setup, encrypted cloud upload and
+cloud-download restore are now complete. See [current offsite runbook](offsite-backups.md)
+for the deployed schedule, recovery evidence and remaining limitations.

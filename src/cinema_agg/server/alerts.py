@@ -22,6 +22,17 @@ RETRY_MS = 15 * 60_000
 def format_alert_message(issue: str, data: dict[str, Any]) -> str:
     # Plain text: provider titles/underscores must not break Telegram Markdown.
     lines = [f"CINEMA PILOT: {issue}", ISSUE_HELP.get(issue, "Unknown issue")]
+    if issue == "offsite_backup_attention":
+        offsite = data.get("offsite_backup", {})
+        lines.extend(
+            [
+                f"Status: {safe_label(offsite.get('status'))} | "
+                f"phase: {safe_label(offsite.get('phase'))}",
+                "Last verified cloud restore: "
+                + local_time(offsite.get("last_success_ms")),
+                f"Error: {safe_label(offsite.get('error_type', 'none'))}",
+            ]
+        )
     evidence = data.get("evidence", {})
     rows = (
         evidence.get("failed_attempts", [])
@@ -53,6 +64,13 @@ def format_alert_message(issue: str, data: dict[str, Any]) -> str:
 
 
 def format_resolved_message(issue: str, data: dict[str, Any]) -> str:
+    if issue == "offsite_backup_attention":
+        return (
+            "CINEMA PILOT: offsite backup condition cleared\n"
+            "Last verified cloud upload/restore: "
+            + local_time(data.get("offsite_backup", {}).get("last_success_ms"))
+            + "\nDetails: sudo cinema-pilot-status"
+        )
     return (
         f"CINEMA PILOT: condition cleared\n{issue} is no longer present in "
         f"the health report.\n"

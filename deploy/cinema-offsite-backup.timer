@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily verified offsite cinema backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+RandomizedDelaySec=120
+Persistent=true
+Unit=cinema-offsite-backup.service
+
+[Install]
+WantedBy=timers.target

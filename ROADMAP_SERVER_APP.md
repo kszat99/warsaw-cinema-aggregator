@@ -15,22 +15,20 @@ before expanding. Both Telegram integrations now use Cinema Alerts; the independ
 missed-heartbeat/recovery exercise remains outstanding. Public website unchanged.
 Bounded transient retries are also deployed: one retry after 30 seconds, only with
 enough time remaining inside the original window. See runbook for exact exclusions,
-timing reserves, coverage and recovery semantics. Next implementation priority: offsite
-backup destination and a restore exercise while the two-provider pilot gathers evidence.
-September 30, 15:00 Warsaw: independent restore drill passed on the development PC
-(integrity, matching checksum, API reads and planner deduplication). See
-[restore evidence and offsite proposal](docs/backup-restore-drill-20260930.md).
-Owner requested a free destination; Backblaze B2 recommended after checking current
-10 GB free allowance and no-card signup. Account/bucket setup is the next owner step;
-automated offsite upload and cloud-download restore are not enabled/verified yet.
-Owner has now created the B2 account, private encrypted bucket and scoped application
-key. Installed `sudo cinema-configure-offsite-backup` on the VPS: interactive hidden
-credential prompts, confirmation, atomic exclusive write to root-only (0600)
-`/etc/warsaw-cinema/offsite-backup.json`. Owner completed setup; credentials never
-entered chat or Git. Live B2 v4 authentication and bucket listing succeeded (HTTP 200);
-key restricted to exactly the configured bucket, with list/read/write/delete permissions.
-Root ownership and mode 0600 verified. Next: implement uploads/retention/alerts and test
-a cloud-download restore. No cloud upload has been tested or scheduled yet.
+timing reserves, coverage and recovery semantics.
+
+Encrypted B2 offsite backups are now deployed and scheduled daily at 03:15 UTC
+(+ up to two minutes). First upload and cloud restore passed at 17:24:59 Warsaw:
+381 observations and 990 jobs preserved, full integrity/schema/foreign keys and hash
+verified. A second cloud download was checked on the PC through the actual API.
+Retention keeps seven daily/four weekly points; hidden versions expire after one day.
+Failure/staleness/storage alerts use existing Telegram monitoring. Recovery credentials
+are protected outside Git on the PC as well as the VPS. See
+[offsite runbook and restore evidence](docs/offsite-backups.md).
+Next: inspect the first unattended overnight backup, complete the independent
+missed-heartbeat/recovery exercise, and review Arkadia's full 24-hour pilot before
+expanding. The earlier [local restore drill](docs/backup-restore-drill-20260930.md)
+remains historical evidence.
 
 Observations are stored in SQLite. See the [seat-pilot runbook](docs/seat-pilot.md);
 run `sudo cinema-pilot-status` on the VPS. This remains an isolated pilot, not the
@@ -43,7 +41,7 @@ an owner item if live.
 | Seat research | Experimental probes and recorded cutoff observations |
 | VPS | OVH VPS-1, reported 2 vCPU / 4 GB RAM / 40 GB storage; Ubuntu installed |
 | VPS evidence | User-reported September 27 smoke results returned counts for 19 sampled cinemas across seven booking platforms |
-| Still unproven | Sustained multi-provider load, remaining fresh-session timings, complete host hardening, offsite restoration and independent outage detection |
+| Still unproven | Sustained multi-provider load, remaining fresh-session timings, complete host hardening, full replacement-host recovery and independent outage detection |
 | Architecture | One VPS, FastAPI, SQLite, separate background processes, Nginx, systemd |
 | Current scope | Development API/database/collection plus Kinoteka and Arkadia pilots on the VPS; public site unchanged |
 
@@ -53,7 +51,8 @@ Local backup rotation and storage reporting are deployed. Managed copies retain 
 daily plus four older weekly copies; manual/legacy backups are protected. New backup
 validation precedes pruning. Status selects latest backup by modification time and
 shows DB/backup/disk totals, with low-space and backup-budget warnings. No screening
-or observation retention/deletion has been enabled. Offsite backups remain outstanding.
+or observation retention/deletion has been enabled. Encrypted offsite backups and a
+cloud-download restore are verified; first unattended overnight run is pending.
 
 Cinema City Arkadia is now scheduled. Investigation history: September 29
 VPS schedule fetch returned 77 screenings for September 30; the earliest booking
@@ -85,13 +84,15 @@ Next: validate sustained coverage and hall formats before adding other venues.
    counts, TLS, browser resource usage and timings on the VPS before enabling each provider.
    Measure bursts before increasing concurrency; keep the legacy site operational.
 5. **Finish unattended-operation safeguards alongside expansion:** review exposed ports and
-   host security, choose offsite backup storage/retention and verify an independent restore.
+   host security and exercise independent outage detection. Offsite storage/retention and
+   cloud restore are implemented; verify the first overnight timer execution and later
+   practice replacement-host recovery.
 6. **Serve observations through the API, then integrate the frontend:** timestamps and
    freshness/error semantics first; mobile accessibility, usability and privacy-conscious
    visitor analytics remain planned. Public HTTPS and switch-over follow validation.
 
 Current implementation limits: only Kinoteka and Arkadia enabled; external outage testing still pending,
-no offsite backup yet. Incident reconstruction
+first unattended offsite timer run and full host recovery still unverified. Incident reconstruction
 currently scans retained observations; incremental/indexed processing is needed before large
 history/multi-provider scale. The 15-minute Telegram timer controls notification latency.
 
@@ -604,6 +605,17 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30, offsite deployment: encrypted restic/B2 repository initialized and first
+backup succeeded at 17:24:59 Warsaw. Both automatic cloud round-trip and a second
+cloud download verified on the PC passed integrity/schema/hash/API checks (381 seat
+observations, 990 jobs). Daily 03:15 UTC timer enabled; seven daily/four weekly retention,
+one-day hidden-version lifecycle, storage guardrails, systemd credentials and existing
+Telegram failure/recovery integration deployed. Recovery bundle protected outside Git
+on owner PC. 163 tests passed locally, strict lint/types and secret scan clean. See
+[runbook and evidence](docs/offsite-backups.md). No seat-worker interruption or public
+site changes. Next: overnight timer evidence, independent outage exercise, 24-hour
+Arkadia review. Release commit and CI evidence follow below after validation.
 
 September 30, afternoon resume: Kinoteka 141/141 and Arkadia 131/131 completed scheduled
 windows successful in the report at 14:59 Warsaw; no current issues, missed checks,
