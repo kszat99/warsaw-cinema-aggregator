@@ -23,6 +23,12 @@ September 30, 15:00 Warsaw: independent restore drill passed on the development 
 Owner requested a free destination; Backblaze B2 recommended after checking current
 10 GB free allowance and no-card signup. Account/bucket setup is the next owner step;
 automated offsite upload and cloud-download restore are not enabled/verified yet.
+Owner has now created the B2 account, private encrypted bucket and scoped application
+key. Installed `sudo cinema-configure-offsite-backup` on the VPS: interactive hidden
+credential prompts, confirmation, atomic exclusive write to root-only (0600)
+`/etc/warsaw-cinema/offsite-backup.json`. Owner must run it; credentials must not enter
+chat or Git. Next: verify scoped access, implement uploads/retention/alerts and test a
+cloud-download restore. Setup helper alone does not enable uploads.
 
 Observations are stored in SQLite. See the [seat-pilot runbook](docs/seat-pilot.md);
 run `sudo cinema-pilot-status` on the VPS. This remains an isolated pilot, not the

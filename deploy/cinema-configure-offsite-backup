@@ -1,0 +1,53 @@
+#!/usr/bin/python3
+"""Interactive, root-only credential setup. Never prints credentials or uploads data."""
+
+import getpass
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+
+def main():
+    if os.geteuid() != 0 or not sys.stdin.isatty():
+        raise SystemExit("Run with sudo in your interactive VPS terminal.")
+    folder = Path("/etc/warsaw-cinema")
+    target = folder / "offsite-backup.json"
+    if target.exists() or target.is_symlink():
+        raise SystemExit("Configuration already exists; nothing was overwritten.")
+    bucket = input("Backup bucket name (not the key name): ").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{6,63}", bucket):
+        raise SystemExit("Invalid bucket name; nothing saved.")
+    key_id = getpass.getpass("Backblaze keyID (hidden): ").strip()
+    secret = getpass.getpass("Backblaze applicationKey (hidden): ").strip()
+    confirmation = getpass.getpass("Paste applicationKey again to confirm (hidden): ").strip()
+    if secret != confirmation:
+        raise SystemExit("Application keys did not match; nothing saved.")
+    if any(not value or len(value) > 512 or any(c.isspace() for c in value)
+           for value in (key_id, secret)):
+        raise SystemExit("Invalid credential format; nothing saved.")
+    os.umask(0o077)
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".offsite-", dir=folder)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump({"bucket_name": bucket, "application_key_id": key_id,
+                       "application_key": secret}, handle)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        # Exclusive publication: another setup process cannot be overwritten.
+        os.link(temporary, target)
+    finally:
+        os.unlink(temporary)
+    print("Saved root-only configuration (0600). Credentials were not printed.")
+    print("Connection not tested yet. Automatic offsite backups are not enabled.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        raise SystemExit("Cancelled; setup did not complete.") from None
