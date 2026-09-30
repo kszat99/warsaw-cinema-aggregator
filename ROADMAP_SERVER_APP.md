@@ -615,7 +615,9 @@ Telegram failure/recovery integration deployed. Recovery bundle protected outsid
 on owner PC. 163 tests passed locally, strict lint/types and secret scan clean. See
 [runbook and evidence](docs/offsite-backups.md). No seat-worker interruption or public
 site changes. Next: overnight timer evidence, independent outage exercise, 24-hour
-Arkadia review. Release commit and CI evidence follow below after validation.
+Arkadia review. Deployed code release: b08c172.
+[Cross-platform CI run](https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36737139399)
+passed Linux Python 3.12/3.13, Windows Python 3.13, source secrets and dependency checks.
 
 September 30, afternoon resume: Kinoteka 141/141 and Arkadia 131/131 completed scheduled
 windows successful in the report at 14:59 Warsaw; no current issues, missed checks,
