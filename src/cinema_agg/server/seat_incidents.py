@@ -49,12 +49,14 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
                 "last_outcome": row["outcome"],
                 "failures": 0,
                 "failed_attempt_ids": [],
+                "failed_job_ids": [],
                 "recovery": None,
             }
             active[key] = incident
             result.append(incident)
         active[key]["failures"] += 1
         active[key]["failed_attempt_ids"].append(row["id"])
+        active[key]["failed_job_ids"].append(row["job_id"])
         active[key]["last_failure_ms"] = row["attempted_at_ms"]
         active[key]["last_outcome"] = row["outcome"]
     return result
@@ -80,8 +82,13 @@ def incident_message(incident: dict[str, Any]) -> str:
                 f"Seats: {recovery['available']} available / "
                 f"{recovery['unavailable']} unavailable / "
                 f"{recovery['capacity']} capacity",
-                "The failed snapshot remains missing; "
-                "later success resolves the incident.",
+                (
+                    "Same scheduled window recovered via retry; "
+                    "failed attempt retained."
+                    if recovery["job_id"] in incident["failed_job_ids"]
+                    else "The failed snapshot remains missing; "
+                    "later success resolves the incident."
+                ),
                 "If no earlier alert arrived, this is the "
                 "combined failure/recovery summary.",
             ]

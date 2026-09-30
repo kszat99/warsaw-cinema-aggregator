@@ -190,11 +190,32 @@ systemctl list-timers cinema-pilot-alerts.timer
 ### Seat request failures
 
 A `network_error` is one failed attempt, with unknown counts. It does not erase
-earlier observations or stop the next scheduled check. Completed network-error and
-timeout attempts currently have no automatic retry; expired interrupted claims may
-be reclaimed only within their two-minute window. Later T+5/T+40 observations are
-separate checks, not retries. Preserve the failed timestamp rather than filling it
-with counts from a different time. A bounded transient-error retry remains future work.
+earlier observations or stop the next scheduled check. Schema `0006_seat_retry` enables
+one automatic retry, 30 seconds after a first scheduled network error or timeout.
+It requires 20 seconds remaining for Kinoteka or 60 for Cinema City's three requests,
+after that delay and inside the original two-minute deadline. Claiming rechecks the
+budget; queue delays or provider cooldown can make a retry ineligible. Waiting does
+not block other jobs. Eligibility persists across restart and source refresh.
+
+TLS/certificate errors, blocks/429, HTTP errors, invalid data, confirmed closure and
+manual diagnostics do not retry. No third request attempt is scheduled. Historical
+completed failures are not reopened. Numeric provider Retry-After/cooldowns still apply.
+A retry returning after the original deadline is recorded as `deadline_exceeded` with
+unknown counts, not successful coverage. The time reserve is conservative scheduling,
+not a hard cancellation of an already-running HTTP operation.
+
+Both attempts retain separate timestamps and outcomes under the same job. Status lists
+waiting retry times, skipped/exhausted retries, and whether recovery was a same-window
+retry or a later scheduled offset. Success on retry counts once toward job coverage;
+the original failed attempt remains visible. Maximum start delay includes retries.
+Telegram uses the same incident/recovery delivery, with explicit same-window recovery
+wording. Later T+5/T+40 observations remain separate checks, not retries.
+
+September 30 retry rollout: pre-upgrade backup
+`/var/lib/cinema-pilot/backups/backup-pre-retry-20260930.sqlite3`; previous wheel under
+`/home/ubuntu/cinema-pilot-rollback-00df19f/`. Existing jobs/observations preserved;
+worker and all timers restarted after the schema migration. Retry behavior is verified
+with offline injected failures; no artificial outages were introduced into live jobs.
 
 In the VPS SSH terminal:
 

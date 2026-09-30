@@ -69,7 +69,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                     text(
                         "SELECT cinema_id,count(*) FROM seat_jobs WHERE "
                         "state='pending' "
-                        "AND due_at_ms>:now GROUP BY cinema_id"
+                        "AND coalesce(retry_at_ms,due_at_ms)>:now GROUP BY cinema_id"
                     ),
                     {"now": now},
                 )
@@ -111,13 +111,14 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 for row in db.execute(
                     text(
                         "SELECT j.id,j.provider,j.cinema_id,j.title,j.starts_at_ms,"
-                        "j.offset_minutes,j.purpose, "
+                        "j.offset_minutes,j.purpose,j.retry_at_ms, "
                         "j.state,j.due_at_ms,j.deadline_ms,j.source_observed_ms, "
                         "min(CASE WHEN o.outcome='success' THEN "
                         "o.attempted_at_ms END) AS success_at, "
                         "max(CASE WHEN o.outcome='closed' THEN 1 ELSE 0 "
                         "END) AS closed, "
-                        "min(o.attempted_at_ms) AS first_attempt "
+                        "min(o.attempted_at_ms) AS first_attempt, "
+                        "max(o.attempted_at_ms) AS last_attempt "
                         "FROM seat_jobs j LEFT JOIN seat_observations o ON "
                         "o.job_id=j.id "
                         "WHERE j.purpose='scheduled' AND j.due_at_ms BETWEEN "
@@ -143,7 +144,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
             pending = db.execute(
                 text(
                     "SELECT count(*) FROM seat_jobs WHERE state='pending' AND "
-                    "due_at_ms>:now"
+                    "coalesce(retry_at_ms,due_at_ms)>:now"
                 ),
                 {"now": now},
             ).scalar_one()
@@ -153,7 +154,9 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                     text(
                         "SELECT j.id AS job_id,j.provider,j.cinema_id,"
                         "j.title,j.starts_at_ms,"
-                        "j.offset_minutes, "
+                        "j.offset_minutes,j.retry_at_ms, "
+                        "(SELECT count(*) FROM seat_observations r "
+                        "WHERE r.job_id=j.id) AS attempt_count, "
                         "j.purpose,j.state,j.due_at_ms,j.deadline_ms,o.id "
                         "AS attempt_id, "
                         "o.attempted_at_ms,o.finished_at_ms,o.outcome,o.http_status, "
@@ -170,9 +173,10 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 for row in db.execute(
                     text(
                         "SELECT id,provider,cinema_id,title,starts_at_ms,"
-                        "due_at_ms,offset_minutes,purpose "
-                        "FROM seat_jobs WHERE state='pending' AND due_at_ms>:now "
-                        "ORDER BY due_at_ms,id LIMIT 3"
+                        "due_at_ms,offset_minutes,purpose,retry_at_ms "
+                        "FROM seat_jobs WHERE state='pending' AND "
+                        "coalesce(retry_at_ms,due_at_ms)>:now "
+                        "ORDER BY coalesce(retry_at_ms,due_at_ms),id LIMIT 3"
                     ),
                     {"now": now},
                 ).mappings()
@@ -216,7 +220,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         for j in eligible
     )
     delays = [
-        max(0, (j["first_attempt"] - j["due_at_ms"]) / 1000)
+        max(0, (j["last_attempt"] - j["due_at_ms"]) / 1000)
         for j in eligible
         if j["first_attempt"] is not None
     ]
@@ -414,6 +418,28 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             lines.append("    Seats: unknown (no valid counts from this attempt)")
         lines.append(f"    Job: {job['job_id']}")
         lines.append(f"    Attempt ID: {job['attempt_id']}")
+        if job.get("retry_at_ms") is not None:
+            if job["state"] == "pending":
+                lines.append(
+                    "    Retry waiting until: "
+                    + local_time(job["retry_at_ms"])
+                    + " (one retry maximum; original deadline still applies)"
+                )
+            elif job["state"] == "running":
+                lines.append("    Retry in progress (one retry maximum).")
+            elif job.get("attempt_count", 0) < 2:
+                lines.append(
+                    "    Retry not attempted: window/budget or source "
+                    "no longer eligible."
+                )
+            else:
+                lines.append(
+                    "    Retry attempted; no additional automatic retry allowed."
+                )
+        elif job["outcome"] in {"network_error", "timeout"}:
+            lines.append(
+                "    Retry not scheduled: insufficient time or attempt not eligible."
+            )
         if "later_recovery" in job:
             recovery = job["later_recovery"]
             if recovery:
@@ -430,7 +456,11 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
                     f"{recovery['unavailable']} unavailable / "
                     f"{recovery['capacity']} capacity"
                 )
-                lines.append("    Original failed snapshot remains missing.")
+                lines.append(
+                    "    Failed attempt retained; this window recovered via retry."
+                    if recovery["job_id"] == job["job_id"]
+                    else "    Original failed snapshot remains missing."
+                )
             else:
                 lines.append(
                     "    UNRESOLVED: no later successful scheduled check "
@@ -655,10 +685,11 @@ def render(data: dict[str, Any]) -> str:
     lines.append("\nNEXT CHECKS (up to 3)")
     for job in evidence["upcoming"]:
         lines.append(
-            f"  {local_time(job['due_at_ms'])} | "
+            f"  {local_time(job.get('retry_at_ms') or job['due_at_ms'])} | "
             f"{cinema_name(job['cinema_id'])} | {safe_label(job['title'])} "
             f"| screening {local_time(job['starts_at_ms'])} "
             f"| T{job['offset_minutes']:+d} minutes"
+            + (" | RETRY" if job.get("retry_at_ms") is not None else "")
         )
     if not evidence["upcoming"]:
         lines.append("  None pending in the future.")

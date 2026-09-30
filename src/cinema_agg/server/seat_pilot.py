@@ -21,7 +21,12 @@ from .cinema_city_probe import presentation_id
 from .cinema_city_probe import probe as city_probe
 from .database import database_engine, require_schema
 from .seat_providers import OFFSETS as PROVIDER_OFFSETS
-from .seat_providers import PROVIDERS
+from .seat_providers import (
+    PROVIDERS,
+    RETRY_BUDGET_MS,
+    RETRY_DELAY_MS,
+    transport_outcome,
+)
 from .settings import Settings
 
 MINUTE = 60000
@@ -210,6 +215,18 @@ def claim(
         )
         connection.execute(
             text(
+                "UPDATE seat_jobs SET state='done' WHERE state='pending' "
+                "AND retry_at_ms IS NOT NULL AND deadline_ms < :now + "
+                "CASE provider WHEN 'cinema_city' THEN :city ELSE :kinoteka END"
+            ),
+            {
+                "now": now,
+                "city": RETRY_BUDGET_MS["cinema_city"],
+                "kinoteka": RETRY_BUDGET_MS["kinoteka"],
+            },
+        )
+        connection.execute(
+            text(
                 "UPDATE seat_jobs SET state='missed' WHERE state='pending' AND "
                 "deadline_ms < :now"
             ),
@@ -237,6 +254,7 @@ def claim(
                 text(
                     "SELECT * FROM seat_jobs WHERE state='pending' AND due_at_ms <= "
                     ":now "
+                    "AND (retry_at_ms IS NULL OR retry_at_ms<=:now) "
                     "AND (:diagnostic=0 OR purpose='diagnostic') "
                     "AND provider IN (SELECT provider FROM seat_provider_status "
                     "WHERE cooldown_until_ms<=:now) "
@@ -338,8 +356,8 @@ def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
         )
     except httpx.TimeoutException:
         result["outcome"] = "timeout"
-    except httpx.HTTPError:
-        result["outcome"] = "network_error"
+    except httpx.HTTPError as error:
+        result["outcome"] = transport_outcome(error)
     except (ValueError, AttributeError, TypeError):
         result["outcome"] = "invalid_data"
     return result
@@ -349,12 +367,57 @@ def finish(
     engine: Engine, job: Mapping[str, Any], result: dict[str, Any], now: int
 ) -> bool:
     with engine.begin() as connection:
+        # Read durable state, never trust an old caller's view when consuming budget.
+        current = (
+            connection.execute(
+                text(
+                    "SELECT * FROM seat_jobs WHERE id=:id AND state='running' "
+                    "AND claim_token=:token AND lease_until_ms>=:now"
+                ),
+                {"id": job["id"], "token": job["claim_token"], "now": now},
+            )
+            .mappings()
+            .first()
+        )
+        if current is None:
+            return False
+        attempts = connection.execute(
+            text("SELECT count(*) FROM seat_observations WHERE job_id=:id"),
+            {"id": job["id"]},
+        ).scalar_one()
+        if current["retry_at_ms"] is not None and now > current["deadline_ms"]:
+            # A slow response is retained as a late attempt, not on-time coverage.
+            result.update(
+                outcome="deadline_exceeded",
+                available=None,
+                unavailable=None,
+                capacity=None,
+            )
+        retry_at = now + RETRY_DELAY_MS
+        retry = (
+            current["purpose"] == "scheduled"
+            and current["retry_at_ms"] is None
+            and attempts == 1
+            and result["outcome"] in {"network_error", "timeout"}
+            and not result["cooldown_ms"]
+            and retry_at + RETRY_BUDGET_MS[current["provider"]]
+            <= current["deadline_ms"]
+        )
+        result["retry_scheduled"] = retry
+        result["retry_at_ms"] = retry_at if retry else current["retry_at_ms"]
         updated = connection.execute(
             text(
-                "UPDATE seat_jobs SET state='done', lease_until_ms=NULL WHERE id=:id "
+                "UPDATE seat_jobs SET state=:state, lease_until_ms=NULL, "
+                "retry_at_ms=:retry_at WHERE id=:id "
                 "AND state='running' AND claim_token=:token AND lease_until_ms >= :now"
             ),
-            {"id": job["id"], "token": job["claim_token"], "now": now},
+            {
+                "id": job["id"],
+                "token": job["claim_token"],
+                "now": now,
+                "state": "pending" if retry else "done",
+                "retry_at": retry_at if retry else current["retry_at_ms"],
+            },
         )
         if not updated.rowcount:
             return False

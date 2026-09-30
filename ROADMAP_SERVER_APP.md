@@ -13,6 +13,10 @@ and existing Telegram failure/recovery alerts identify the cinema. Other venues 
 disabled. Next: review Arkadia scheduled observations, burst delays and closure timing
 before expanding. Both Telegram integrations now use Cinema Alerts; the independent
 missed-heartbeat/recovery exercise remains outstanding. Public website unchanged.
+Bounded transient retries are also deployed: one retry after 30 seconds, only with
+enough time remaining inside the original window. See runbook for exact exclusions,
+timing reserves, coverage and recovery semantics. Next implementation priority: offsite
+backup destination and a restore exercise while the two-provider pilot gathers evidence.
 
 Observations are stored in SQLite. See the [seat-pilot runbook](docs/seat-pilot.md);
 run `sudo cinema-pilot-status` on the VPS. This remains an isolated pilot, not the
@@ -59,10 +63,10 @@ Next: validate sustained coverage and hall formats before adding other venues.
    due/successful/missed/late checks, transient failures, recovered incidents, notification
    delivery and overnight backup. Separate the three known startup misses from later misses.
    This review gates provider expansion, not all parallel development.
-3. **Bounded transient seat retries:** design one delayed retry for network errors/timeouts
-   inside the original deadline and request budget. Preserve both attempts and actual times;
-   do not retry confirmed closure, parser errors or bot challenges blindly. Currently only
-   notification delivery retries; completed seat network errors do not retry automatically.
+3. **Bounded transient seat retries — deployed:** one retry after 30 seconds for the first
+   scheduled network error/timeout, reserving 20s Kinoteka or 60s Cinema City before the
+   original deadline. Both attempts persist; no retry for TLS, HTTP errors, blocks, invalid
+   data, closure or diagnostics. Review real retry outcomes during the pilot.
 4. **Broaden collection one provider at a time:** validate fresh schedules, identity, seat
    counts, TLS, browser resource usage and timings on the VPS before enabling each provider.
    Measure bursts before increasing concurrency; keep the legacy site operational.
@@ -73,7 +77,7 @@ Next: validate sustained coverage and hall formats before adding other venues.
    visitor analytics remain planned. Public HTTPS and switch-over follow validation.
 
 Current implementation limits: only Kinoteka and Arkadia enabled; external outage testing still pending,
-no automatic completed-seat-request retry, and no offsite backup yet. Incident reconstruction
+no offsite backup yet. Incident reconstruction
 currently scans retained observations; incremental/indexed processing is needed before large
 history/multi-provider scale. The 15-minute Telegram timer controls notification latency.
 
@@ -233,7 +237,7 @@ Failure disables only the affected seat capability. Do not silently remove its c
 - Bound traffic by provider/host, not merely cinema. Ingestion and seat processes share request budgets; defer lower-priority refresh work when seat deadlines need the allowance.
 - Retain cautious Multikino pacing initially. Cache static metadata/seat plans only with identity/version validation.
 - Limit redirects, response sizes, per-request timeouts and total job duration. Respect Retry-After and upstream restrictions. Repeated access denial causes a cooldown, not escalating requests or rotating identities.
-- At most two additional attempts for transient timeout/5xx/429, only when backoff plus expected duration fits the window. Session expiry may allow one fresh-session retry. TLS/malformed data/confirmed closure are not reasons for tight retries.
+- Current pilot: at most one additional attempt for network errors/timeouts, after 30s and only when delay plus expected duration fits the original window. No automatic retries for TLS, HTTP errors (including 5xx/429), malformed data or confirmed closure. Broader retry classes require separate provider evidence and review; respect provider cooldowns.
 - Persist provider cooldowns. Permit one controlled recovery probe, not one probe from every queued screening.
 
 ## 5. Data model and integrity
@@ -586,6 +590,16 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30, bounded retries: schema 0006_seat_retry adds nullable retry eligibility
+and a job/observation lookup index. One first-attempt transient retry is durable and
+fenced; planning/restarts cannot reset the budget. Late queueing finishes an already
+attempted job as failed, not a misleading unattempted miss. Late retry responses do not
+inflate coverage. TLS transport causes are separated from retryable network failures.
+Status and Telegram distinguish same-window retry recovery from later-offset recovery.
+Migration deployed after an integrity-checked backup; Kinoteka/Arkadia schedules retained.
+17 focused retry tests cover both providers, restart, timing limits, fencing, exclusions,
+cooldown, late response, coverage and deduplicated alerts. Full suite and CI recorded below.
 
 September 30, Arkadia automatic collection: schema 0005_seat_providers adds provider
 and catalogue cinema identity, backfills existing jobs as Kinoteka, and stores independent

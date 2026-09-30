@@ -11,6 +11,7 @@ from uuid import uuid4
 import httpx
 
 from .collector import WARSAW, make_fetch
+from .seat_providers import transport_outcome
 
 ORIGIN = "https://tickets.cinema-city.pl"
 
@@ -158,8 +159,8 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
         }
     except httpx.TimeoutException:
         return {"outcome": "timeout", "step": step}
-    except httpx.HTTPError:
-        return {"outcome": "network_error", "step": step}
+    except httpx.HTTPError as error:
+        return {"outcome": transport_outcome(error), "step": step}
     except (ValueError, KeyError, TypeError, AttributeError):
         return {"outcome": "invalid_data", "step": step}
 

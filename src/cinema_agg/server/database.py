@@ -8,7 +8,7 @@ from alembic.config import Config
 from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.pool import NullPool
 
-SCHEMA_REVISION = "0005_seat_providers"
+SCHEMA_REVISION = "0006_seat_retry"
 
 
 class SchemaUnavailable(Exception):
@@ -56,7 +56,9 @@ def require_schema(connection: Connection) -> None:
         raise SchemaUnavailable("Database schema does not match this application.")
     connection.execute(text("SELECT id, status, snapshot_id FROM fetch_runs LIMIT 0"))
     connection.execute(text("SELECT run_id, outcome FROM fetch_results LIMIT 0"))
-    connection.execute(text("SELECT provider,cinema_id FROM seat_jobs LIMIT 0"))
+    connection.execute(
+        text("SELECT provider,cinema_id,retry_at_ms FROM seat_jobs LIMIT 0")
+    )
     connection.execute(
         text(
             "SELECT provider,activated_at_ms,cooldown_until_ms "
