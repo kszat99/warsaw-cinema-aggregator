@@ -135,6 +135,8 @@ async def collect(
                 ]
                 began = perf_counter()
                 count = 0
+                previous_upcoming = None
+                fetched_upcoming = None
                 error_type = None
                 outcome = "fetch_error"
                 try:
@@ -143,7 +145,7 @@ async def collect(
                     fresh = await asyncio.wait_for(
                         fetch(cinema_id, target), timeout_seconds
                     )
-                    observed = datetime.now(UTC)
+                    observed = utc_datetime(now_ms())
                     for row in fresh:
                         if not scope_matches(row, cinema_id, target):
                             raise ValueError(
@@ -154,9 +156,15 @@ async def collect(
                         )
                         row.scraped_at = observed
                     count = len(fresh)
+                    previous_upcoming = sum(
+                        utc_datetime(utc_milliseconds(r.starts_at, "Europe/Warsaw"))
+                        >= observed
+                        for r in previous
+                    )
+                    fetched_upcoming = sum(r.starts_at >= observed for r in fresh)
                     if not fresh:
                         outcome = "empty_unconfirmed"
-                    elif count * 2 < len(previous):
+                    elif fetched_upcoming * 2 < previous_upcoming:
                         outcome = "count_drop_quarantined"
                     else:
                         outcome = "accepted"
@@ -187,6 +195,8 @@ async def collect(
                     "outcome": outcome,
                     "count": count,
                     "previous_count": len(previous),
+                    "previous_upcoming": previous_upcoming,
+                    "fetched_upcoming": fetched_upcoming,
                     "duration_ms": int((perf_counter() - began) * 1000),
                     "error_type": error_type,
                     "observed_at_ms": now_ms(),
@@ -197,10 +207,12 @@ async def collect(
                             "INSERT INTO fetch_results (run_id, cinema_id, "
                             "target_date, "
                             "outcome, count, previous_count, duration_ms, error_type, "
-                            "observed_at_ms) VALUES (:run_id, :cinema_id, "
+                            "previous_upcoming, fetched_upcoming, observed_at_ms) "
+                            "VALUES (:run_id, :cinema_id, "
                             ":target_date, "
                             ":outcome, :count, :previous_count, :duration_ms, "
-                            ":error_type, :observed_at_ms)"
+                            ":error_type, :previous_upcoming, "
+                            ":fetched_upcoming, :observed_at_ms)"
                         ),
                         result,
                     )

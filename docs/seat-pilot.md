@@ -316,3 +316,22 @@ consistent backup, install the reviewed package, run migrations explicitly, veri
 readiness and restart. Preserve the previous package and backup for rollback; do not
 downgrade schemas destructively. The installed Git revision belongs in
 `/opt/cinema-pilot/RELEASE`.
+
+## Schedule warnings and elapsed screenings (September 30 correction)
+
+A refresh updates screening times; the seat worker is a separate process. A partial
+refresh accepts successful cinema/date updates and retains previous data for rejected
+ones. The seven-hour warning measures time since a fully accepted refresh, so a partial
+run can cause both a partial and later age warning without a second network outage.
+
+Count-drop validation compares previously upcoming and newly returned upcoming
+screenings at the same fetch-completion instant, ignoring elapsed screenings. A greater
+than 50% upcoming drop is quarantined; an empty response is still unconfirmed, never
+treated as proof of closure. Schema 0007 records both counts. Older runs lack those
+counts and are labelled as legacy full-day comparisons in incident explanations.
+The terminal and Telegram show affected venue/date, counts, retained-data impact and
+separate seat-collection evidence. Recovery reports the actual latest refresh status.
+
+After investigating the cause, rerun with:
+sudo systemctl start cinema-pilot-refresh.service
+This uses the existing pacing and lock; do not restart the seat worker for schedule warnings.

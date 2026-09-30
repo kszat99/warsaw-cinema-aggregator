@@ -1,7 +1,7 @@
 import asyncio
 import json
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 import httpx
@@ -245,3 +245,39 @@ def test_explicit_rate_limit_stops_remaining_requests(tmp_path):
         "blocked",
         "cooldown_skipped",
     ]
+
+
+@pytest.fixture(autouse=True)
+def fixed_collection_clock(monkeypatch):
+    monkeypatch.setattr(
+        "cinema_agg.server.collector.now_ms",
+        lambda: int(
+            datetime.fromisoformat("2026-09-29T10:00:00+02:00").timestamp() * 1000
+        ),
+    )
+
+
+@pytest.mark.parametrize("future_count,expected", [(2, "complete"), (0, "failed")])
+def test_elapsed_rows_do_not_mask_real_future_losses(tmp_path, future_count, expected):
+    old = [
+        row(title=f"Past{i}").model_copy(
+            update={"starts_at": datetime.fromisoformat("2026-09-29T09:00:00+02:00")}
+        )
+        for i in range(8)
+    ]
+    upcoming = [row(title=f"Future{i}") for i in range(2)]
+    path = setup(tmp_path, old + upcoming)
+
+    async def fetch(cinema, target):
+        # Success drops only elapsed rows; failure returns many past rows but no future.
+        return upcoming if future_count else old
+
+    result = asyncio.run(
+        collect(path, ["example"], [date(2026, 9, 29)], fetch, delay_seconds=0)
+    )
+    assert result["status"] == expected
+    with sqlite3.connect(path) as db:
+        counts = db.execute(
+            "SELECT previous_upcoming,fetched_upcoming FROM fetch_results"
+        ).fetchone()
+    assert counts == (2, future_count)

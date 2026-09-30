@@ -6,6 +6,10 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+September 30 evening maintenance: schedule-count validation and refresh alert clarity
+corrected; see the latest handover entry. Seven-hour stale warnings concern the last
+fully accepted schedule run, not a seven-hour interruption in seat collection.
+
 **Current checkpoint, September 30:** Arkadia now
 uses automatic T-5/T/T+5/T+10 seat jobs; Kinoteka retains T-5/T/T+5/T+40. Shared schedule
 refresh fetches both venues today/tomorrow. Provider cooldowns are independent; status
@@ -605,6 +609,21 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30 evening, schedule alert correction: Arkadia's 20:10 response had 15
+screenings versus 52 earlier, but exactly 15 earlier screenings were still upcoming.
+The full-day comparison incorrectly quarantined normal expiry and subsequently caused
+the seven-hour stale warning. Collection now compares upcoming counts at one UTC instant;
+empty responses remain unconfirmed, and real upcoming drops greater than 50% remain
+quarantined. Schema 0007_refresh_evidence persists both comparable counts (older rows
+remain explicitly unknown). Terminal and Telegram now share cinema/date/count/retention
+evidence, last complete refresh time/age, separate seat status and action. When both
+conditions exist the stale alert explains its relationship to the partial refresh.
+Recovery messages state the actual latest run instead of generic historical age-out.
+167 tests passed, including regression coverage for elapsed removals, masked future
+losses and alert explanations; lint/types/secret scan passed. VPS migrated after a
+verified backup; seat worker restarted between checks and refresh rerun for live proof.
+
 
 September 30, offsite deployment: encrypted restic/B2 repository initialized and first
 backup succeeded at 17:24:59 Warsaw. Both automatic cloud round-trip and a second

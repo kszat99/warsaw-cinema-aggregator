@@ -11,7 +11,13 @@ from sqlalchemy import text
 
 from .database import database_engine, require_schema
 from .heartbeat import send_heartbeat
-from .pilot_health import ISSUE_HELP, local_time, report, safe_label
+from .pilot_health import (
+    ISSUE_HELP,
+    local_time,
+    refresh_explanation,
+    report,
+    safe_label,
+)
 from .seat_incidents import incident_message
 from .seat_providers import cinema_name
 from .settings import Settings
@@ -22,6 +28,12 @@ RETRY_MS = 15 * 60_000
 def format_alert_message(issue: str, data: dict[str, Any]) -> str:
     # Plain text: provider titles/underscores must not break Telegram Markdown.
     lines = [f"CINEMA PILOT: {issue}", ISSUE_HELP.get(issue, "Unknown issue")]
+    if issue in {
+        "schedule_refresh_stale",
+        "latest_refresh_failed_or_partial",
+        "schedule_refresh_stuck",
+    }:
+        return "\n".join([*lines, *refresh_explanation(data)])[:3500]
     if issue == "offsite_backup_attention":
         offsite = data.get("offsite_backup", {})
         lines.extend(
@@ -64,6 +76,21 @@ def format_alert_message(issue: str, data: dict[str, Any]) -> str:
 
 
 def format_resolved_message(issue: str, data: dict[str, Any]) -> str:
+    if issue in {
+        "schedule_refresh_stale",
+        "latest_refresh_failed_or_partial",
+        "schedule_refresh_stuck",
+    }:
+        refresh = data["refresh"]
+        latest = refresh.get("latest") or {}
+        return (
+            f"CINEMA PILOT: schedule condition cleared ({issue})\n"
+            f"Latest run: {latest.get('status', 'missing')} at "
+            + local_time(latest.get("finished_at_ms"))
+            + "\nLast fully successful refresh: "
+            + local_time(refresh.get("last_success_at_ms"))
+            + "\nThis concerns movie schedules; seat checks are monitored separately."
+        )
     if issue == "offsite_backup_attention":
         return (
             "CINEMA PILOT: offsite backup condition cleared\n"

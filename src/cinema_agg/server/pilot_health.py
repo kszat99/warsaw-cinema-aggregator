@@ -98,7 +98,8 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                         text(
                             "SELECT "
                             "cinema_id,target_date,outcome,count,"
-                            "previous_count,error_type "
+                            "previous_count,previous_upcoming,"
+                            "fetched_upcoming,error_type "
                             "FROM fetch_results WHERE run_id=:id ORDER BY "
                             "cinema_id,target_date"
                         ),
@@ -538,6 +539,74 @@ ISSUE_HELP = {
 }
 
 
+def refresh_explanation(data: dict[str, Any]) -> list[str]:
+    """Shared operational evidence for terminal and Telegram."""
+    refresh = data["refresh"]
+    latest = refresh.get("latest") or {}
+    scopes = refresh.get("scopes", [])
+    accepted = sum(s["outcome"] == "accepted" for s in scopes)
+    lines = [
+        "Schedule refresh = updating movie times, not checking seats.",
+        f"Latest run: {latest.get('status', 'missing')} at "
+        + local_time(latest.get("finished_at_ms")),
+        f"Accepted cinema/date updates: {accepted}/{len(scopes)}.",
+        "Last fully successful run: " + local_time(refresh.get("last_success_at_ms")),
+    ]
+    age_minutes = refresh.get("last_success_age_minutes")
+    if age_minutes is not None:
+        lines.append(f"Age: {age_minutes:.0f} minutes; warning threshold: 420 minutes.")
+    for scope in scopes:
+        if scope["outcome"] == "accepted":
+            continue
+        lines.append(
+            f"{cinema_name(scope['cinema_id'])} | {scope['target_date']}: "
+            f"{scope['outcome']}; returned {scope['count']}, "
+            f"previous total {scope['previous_count']}."
+        )
+        if scope.get("previous_upcoming") is not None:
+            lines.append(
+                f"At fetch time: previously upcoming {scope['previous_upcoming']}, "
+                f"returned upcoming {scope['fetched_upcoming']}."
+            )
+        if scope["outcome"] == "count_drop_quarantined":
+            if scope.get("previous_upcoming") is None:
+                lines.append(
+                    "Legacy comparison used full-day totals, including past screenings."
+                )
+            lines.append(
+                "Update held because the count fell by more than 50%; "
+                "previous schedule retained."
+            )
+        elif scope["outcome"] == "empty_unconfirmed":
+            lines.append("Empty response is unconfirmed; previous schedule retained.")
+        else:
+            lines.append(
+                "Update not accepted; previous schedule retained. Error category: "
+                + safe_label(scope.get("error_type") or scope["outcome"])
+            )
+    if {"schedule_refresh_stale", "latest_refresh_failed_or_partial"}.issubset(
+        data.get("issues", [])
+    ):
+        lines.append(
+            "The age warning follows the incomplete refresh above; "
+            "it does not establish a second outage."
+        )
+    seats = data.get("seats", {})
+    worker = data.get("worker", {})
+    lines.append(
+        f"Separate seat collection: worker heartbeat age "
+        f"{worker.get('heartbeat_age_seconds', 'unknown')}s; "
+        f"successful windows {seats.get('successful_jobs', '?')}/"
+        f"{seats.get('windows_finished', '?')} in this report."
+    )
+    lines.append(
+        "Action: inspect the affected cinema/date; after correcting the cause, run "
+        "sudo systemctl start cinema-pilot-refresh.service. "
+        "Do not restart the seat worker just for this warning."
+    )
+    return lines
+
+
 def render(data: dict[str, Any]) -> str:
     refresh, seats, worker, backup = (
         data[k] for k in ("refresh", "seats", "worker", "backup")
@@ -558,6 +627,11 @@ def render(data: dict[str, Any]) -> str:
         lines.append("  No detected problems in the checks below.")
     for issue in data["issues"]:
         lines.append(f"  [{issue}] {ISSUE_HELP[issue]}")
+    if any(
+        i.startswith("schedule_refresh") or i == "latest_refresh_failed_or_partial"
+        for i in data["issues"]
+    ):
+        lines.extend("  " + line for line in refresh_explanation(data))
     storage = data.get("storage")
     if storage:
         lines.append(
@@ -669,11 +743,16 @@ def render(data: dict[str, Any]) -> str:
         lines.append("  Latest refresh: none recorded")
     for scope in refresh["scopes"]:
         lines.append(
-            f"    {scope['cinema_id']} {scope['target_date']}: "
+            f"    {cinema_name(scope['cinema_id'])} {scope['target_date']}: "
             f"{scope['outcome']} | screenings {scope['count']} / "
             f"previous {scope['previous_count']} | error "
             f"{scope['error_type'] or 'none'}"
         )
+        if scope.get("previous_upcoming") is not None:
+            lines.append(
+                f"      Comparable upcoming: {scope['fetched_upcoming']} returned / "
+                f"{scope['previous_upcoming']} previously expected."
+            )
     lines.extend(
         [
             f"  Local backup: {backup['status']} | age {age(backup['age_minutes'])}min "
