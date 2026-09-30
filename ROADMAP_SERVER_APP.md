@@ -17,6 +17,12 @@ Bounded transient retries are also deployed: one retry after 30 seconds, only wi
 enough time remaining inside the original window. See runbook for exact exclusions,
 timing reserves, coverage and recovery semantics. Next implementation priority: offsite
 backup destination and a restore exercise while the two-provider pilot gathers evidence.
+September 30, 15:00 Warsaw: independent restore drill passed on the development PC
+(integrity, matching checksum, API reads and planner deduplication). See
+[restore evidence and offsite proposal](docs/backup-restore-drill-20260930.md).
+Owner requested a free destination; Backblaze B2 recommended after checking current
+10 GB free allowance and no-card signup. Account/bucket setup is the next owner step;
+automated offsite upload and cloud-download restore are not enabled/verified yet.
 
 Observations are stored in SQLite. See the [seat-pilot runbook](docs/seat-pilot.md);
 run `sudo cinema-pilot-status` on the VPS. This remains an isolated pilot, not the
@@ -590,6 +596,16 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30, afternoon resume: Kinoteka 141/141 and Arkadia 131/131 completed scheduled
+windows successful in the report at 14:59 Warsaw; no current issues, missed checks,
+overdue jobs or active incidents. Arkadia has approximately five hours of evidence;
+retain the 24-hour gate before adding venues. Created an integrity-checked fresh backup,
+downloaded privately to the PC, matched SHA-256, verified full integrity/foreign keys,
+read restored data through the actual API and ran the planner twice on a disposable
+working copy without adding jobs. Preserved 316 observations and 990 jobs. No production
+interruption. Backblaze B2 recommended as requested free offsite option; waiting for
+owner account creation before credentials, uploads and end-to-end cloud restore.
 
 September 30, bounded retries: schema 0006_seat_retry adds nullable retry eligibility
 and a job/observation lookup index. One first-attempt transient retry is durable and
