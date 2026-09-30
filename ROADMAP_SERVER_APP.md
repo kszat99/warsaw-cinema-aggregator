@@ -622,7 +622,14 @@ conditions exist the stale alert explains its relationship to the partial refres
 Recovery messages state the actual latest run instead of generic historical age-out.
 167 tests passed, including regression coverage for elapsed removals, masked future
 losses and alert explanations; lint/types/secret scan passed. VPS migrated after a
-verified backup; seat worker restarted between checks and refresh rerun for live proof.
+verified backup; seat worker restarted between checks. Live refresh completed at
+21:25:21 Warsaw: Arkadia today 12 returned / 52 previous total, but 11/11 comparable
+upcoming; all four cinema/date updates accepted. Health OK, 383/383 finished windows
+successful, no missed/overdue jobs. Telegram accepted both condition-cleared messages
+at 21:25:37. Deployed release 7645e3c passed all cross-platform/security CI:
+https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36765346251.
+First overnight offsite backup will validate the new schema; earlier restore evidence
+uses its original schema/release.
 
 
 September 30, offsite deployment: encrypted restic/B2 repository initialized and first
