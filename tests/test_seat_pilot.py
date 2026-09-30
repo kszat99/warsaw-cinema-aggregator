@@ -119,7 +119,8 @@ def test_rate_limit_cooldown_is_persistent(engine):
         result = probe(client, job)
     finish(engine, job, result, NOW + 1)
     assert claim(engine, NOW + 5 * MINUTE) is None
-    assert status(engine)['worker']['cooldown_until_ms'] >= NOW + 30 * MINUTE
+    with engine.connect() as db:
+        assert db.execute(text("SELECT cooldown_until_ms FROM seat_provider_status WHERE provider='kinoteka'")).scalar_one() >= NOW + 30 * MINUTE
 
 
 def test_ambiguous_event_start_does_not_schedule(engine):

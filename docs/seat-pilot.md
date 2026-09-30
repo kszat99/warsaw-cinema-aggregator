@@ -1,7 +1,25 @@
-# Kinoteka analytics pilot on the VPS
+# Kinoteka and Arkadia analytics pilots on the VPS
 
-Scope: Kinoteka only. The pilot uses the read-only occupancy endpoint over verified
-HTTPS; it never selects, reserves or purchases seats. Other providers remain disabled.
+Scope: Kinoteka and Cinema City Arkadia (catalogue ID 1074). Verified HTTPS and read-only
+occupancy/layout/status requests; never selects, reserves or purchases seats. Other
+venues remain disabled. Shared database/worker, independent provider cooldowns.
+
+September 30 deployment evidence (Warsaw time): combined refresh completed 09:39:05,
+accepting 74 Arkadia screenings today and 74 tomorrow, plus 33/day for Kinoteka.
+592 scheduled Arkadia checks queued. Stored diagnostic 09:39:23 for Lalka at 10:00
+(presentation 1709363): 120 available / 252 unavailable / 372 capacity. First automatic
+Arkadia checks due 09:55; sustained scheduled coverage remains to be reviewed.
+Kinoteka completed its 09:40 check after deployment. Telegram accepted a clearly labelled
+deployment test; alert evaluation completed with external heartbeat acknowledged 09:40:20.
+No active screening incidents or overdue jobs at that verification point.
+
+The upgrade took approximately three seconds between Kinoteka checks. Integrity-checked
+pre-upgrade backup: `/var/lib/cinema-pilot/backups/backup-pre-arkadia-20260930.sqlite3`.
+Prior wheel/units: `/home/ubuntu/cinema-pilot-rollback-c09afde/`. Rollback requires stopping
+worker/refresh/alert/backup services and timers, retaining the current DB, restoring the
+old backup and matching package/units, then daemon-reload/restart. Restoring the backup
+removes post-upgrade records from the active database; retain the current DB to reconcile
+them. Never restore while a writer is running or downgrade schema in place.
 
 ## Inspect it
 
@@ -21,7 +39,7 @@ total/count and free/total disk. Warnings trigger below 15% free or 1 GiB free, 
 when local backups exceed an initial 2 GiB budget. The budget warns; it never deletes
 protected copies or the live database. This is local retention, not offsite backup.
 
-### Cinema City readiness (not scheduled)
+### Cinema City Arkadia automatic collection and manual readiness
 
 `python -m cinema_agg.server.cinema_city_probe` fetches tomorrow's Arkadia schedule,
 selects the earliest screening and attempts the read-only presentation/layout/status
@@ -41,8 +59,27 @@ succeeds: 74 October 1 screenings; Odyseja at 09:30, presentation 1709930,
 [Booking](https://tickets.cinema-city.pl/api/order/1709930?lang=pl).
 Unavailable does not mean purchased; counts also precede any UI-specific isolated-seat
 selection restrictions. This sample proves access/count parsing, not sustained coverage.
-Unattended Cinema City remains disabled pending provider-aware jobs, offsets and
-worker/alert integration; the existing Kinoteka worker remains unchanged.
+Arkadia automatic scheduling is now enabled using this verified probe. Schema
+0005_seat_providers preserves existing Kinoteka jobs, adds provider/cinema labels and
+records activation on first planning with fresh Arkadia rows. Earlier check times are
+skipped, not counted as missed. Subsequent missed windows remain visible normally.
+Kinoteka offsets and job IDs are unchanged.
+
+Status shows each cinema's coverage, confirmed closures, missed windows and pending
+checks. Telegram alerts name the cinema and screening; existing 15-minute evaluation
+and durable delivery retries apply. Successful checks do not send routine notifications.
+Explicit sales closure keeps counts null, is separate from failures and successful seat
+counts, and cannot resolve an earlier failure without a later successful seat observation.
+
+Stored manual diagnostic (excluded from scheduled coverage):
+
+```sh
+sudo -u cinema-pilot /opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.seat_pilot --database /var/lib/cinema-pilot/cinema.sqlite3 probe-next --cinema 1074
+```
+
+The shared claim lease prevents overlapping observations. A busy worker can leave this
+command without a claimable diagnostic; prefer normal scheduled collection, not repeated
+manual probes. The standalone readiness command above does not write observations.
 
 `cinema-pilot-status` and `cinema-pilot-health` now show the same full report.
 WHY THIS STATUS explains every warning first. All affected jobs and failed scheduled
@@ -199,18 +236,19 @@ sudo -u cinema-pilot /opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.sea
 - `cinema-seat-pilot.service`: checks due work every five seconds; plans upcoming
   jobs every minute. systemd starts it at boot and restarts it on failure. No PC or
   SSH session must remain open.
-- Timings: T-5, T, T+5 and T+40 minutes from advertised start. Identical timing
+- Timings: Kinoteka T-5/T/T+5/T+40; Arkadia T-5/T/T+5/T+10. Identical timing
   offsets are deduplicated. A two-minute lateness allowance accommodates queueing;
   actual attempt/finish times are stored. Expired windows become `missed`.
-- `cinema-pilot-refresh.timer`: refreshes today/tomorrow's Kinoteka screenings every
+- `cinema-pilot-refresh.timer`: refreshes today/tomorrow's Kinoteka and Arkadia screenings every
   six hours. Accepted data feeds the planner; failures retain earlier data.
 - Sources older than 48 hours are not used for new checks. An ambiguous provider
   event/start is not guessed; rescheduled pending jobs are superseded.
 - Durable job identity includes provider cinema/event ID, screening start, timing
   offset and policy version. Restarting does not duplicate completed jobs. An
   interrupted attempt is retained; expired leases can recover within the deadline.
-- One request at a time, at least two seconds apart. 403/429 pauses probing for at
-  least 15 minutes (numeric Retry-After can extend this). Generic 404s and missing
+- One observation at a time, at least two seconds between observations; Arkadia uses
+  three sequential read-only requests per observation. 403/429 pauses only that provider
+  for at least 15 minutes (numeric Retry-After can extend this). Generic 404s and missing
   counts are not called closed sales. The endpoint's count response does not prove
   sales are still open or counts reflect final purchases.
 - The service runs as `cinema-pilot`, with no login shell, restricted filesystem

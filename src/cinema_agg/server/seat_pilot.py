@@ -1,4 +1,4 @@
-"""Kinoteka-only background pilot. No seat selection, holds or ticket orders."""
+"""Kinoteka and Arkadia background pilot. No seat selection, holds or ticket orders."""
 
 import argparse
 import csv
@@ -17,10 +17,13 @@ from uuid import UUID, uuid4
 import httpx
 from sqlalchemy import Engine, text
 
+from .cinema_city_probe import presentation_id
+from .cinema_city_probe import probe as city_probe
 from .database import database_engine, require_schema
+from .seat_providers import OFFSETS as PROVIDER_OFFSETS
+from .seat_providers import PROVIDERS
 from .settings import Settings
 
-OFFSETS = (-5, 0, 5, 40)
 MINUTE = 60000
 FRESHNESS = 48 * 60 * MINUTE
 
@@ -40,7 +43,17 @@ def booking_identity(url: str) -> tuple[str, str]:
     return str(UUID(values["cinemaId"][0])), str(UUID(values["screeningId"][0]))
 
 
-def plan(engine: Engine, now: int, *, diagnostic: bool = False) -> int:
+def job_identity(cinema_id: str, url: str) -> tuple[str, str]:
+    if cinema_id == "1074":
+        return "1074", presentation_id(url)
+    if cinema_id == "kinoteka":
+        return booking_identity(url)
+    raise ValueError("Cinema not enabled")
+
+
+def plan(
+    engine: Engine, now: int, *, diagnostic: bool = False, cinema_id: str | None = None
+) -> int:
     """Stable provider ID + start/revision + offset deduplicates repeated planning."""
     inserted = 0
     with engine.begin() as connection:
@@ -48,15 +61,19 @@ def plan(engine: Engine, now: int, *, diagnostic: bool = False) -> int:
         rows = (
             connection.execute(
                 text(
-                    "SELECT booking_url, title_raw, starts_at_ms, scraped_at_ms FROM "
+                    "SELECT cinema_id, booking_url, title_raw, "
+                    "starts_at_ms, scraped_at_ms FROM "
                     "screenings "
                     "WHERE snapshot_id=(SELECT id FROM imports ORDER BY "
                     "generated_at_ms DESC LIMIT 1) "
-                    "AND cinema_id='kinoteka' AND starts_at_ms >= :oldest "
+                    "AND cinema_id IN ('kinoteka','1074') AND "
+                    "(:cinema_id IS NULL OR cinema_id=:cinema_id) "
+                    "AND starts_at_ms >= :oldest "
                     "AND starts_at_ms <= :horizon AND scraped_at_ms >= :fresh "
                     "ORDER BY starts_at_ms, ordinal"
                 ),
                 {
+                    "cinema_id": cinema_id,
                     "oldest": now + 5 * MINUTE if diagnostic else now - 42 * MINUTE,
                     "horizon": now + FRESHNESS,
                     "fresh": now - FRESHNESS,
@@ -65,16 +82,33 @@ def plan(engine: Engine, now: int, *, diagnostic: bool = False) -> int:
             .mappings()
             .all()
         )
+        for provider in {PROVIDERS[row["cinema_id"]] for row in rows}:
+            connection.execute(
+                text(
+                    "UPDATE seat_provider_status SET activated_at_ms=:now "
+                    "WHERE provider=:provider AND activated_at_ms IS NULL"
+                ),
+                {"provider": provider, "now": now},
+            )
+        activation = dict(
+            connection.execute(
+                text("SELECT provider,activated_at_ms FROM seat_provider_status")
+            )
+            .tuples()
+            .all()
+        )
         starts_by_event: dict[tuple[str, str], set[int]] = {}
         for row in rows:
             try:
-                key = booking_identity(row["booking_url"] or "")
+                key = job_identity(row["cinema_id"], row["booking_url"] or "")
             except (ValueError, TypeError):
                 continue
             starts_by_event.setdefault(key, set()).add(row["starts_at_ms"])
         for row in rows:
             try:
-                cinema, event_id = booking_identity(row["booking_url"] or "")
+                cinema, event_id = job_identity(
+                    row["cinema_id"], row["booking_url"] or ""
+                )
             except (ValueError, TypeError):
                 continue
             if len(starts_by_event[(cinema, event_id)]) != 1:
@@ -96,22 +130,27 @@ def plan(engine: Engine, now: int, *, diagnostic: bool = False) -> int:
                 ),
                 {"event": event_id, "cinema": cinema, "start": row["starts_at_ms"]},
             )
-            for offset in (0,) if diagnostic else sorted(set(OFFSETS)):
+            provider = PROVIDERS[row["cinema_id"]]
+            for offset in (0,) if diagnostic else PROVIDER_OFFSETS[provider]:
                 purpose = "diagnostic" if diagnostic else "scheduled"
                 identity = (
-                    f"kinoteka:{cinema}:{event_id}:{row['starts_at_ms']}:{offset}:v1"
+                    f"{provider}:{cinema}:{event_id}:{row['starts_at_ms']}:{offset}:v1"
                 )
                 if diagnostic:
                     identity += ":" + uuid4().hex
                 job_id = hashlib.sha256(identity.encode()).hexdigest()
                 due = now if diagnostic else row["starts_at_ms"] + offset * MINUTE
+                if due < activation[provider]:
+                    continue
                 result = connection.execute(
                     text(
-                        "INSERT INTO seat_jobs (id, cinema_event, provider_cinema, "
+                        "INSERT INTO seat_jobs (id, provider, cinema_id, "
+                        "cinema_event, provider_cinema, "
                         "title, "
                         "starts_at_ms, source_observed_ms, offset_minutes, purpose, "
                         "due_at_ms, deadline_ms, state) VALUES "
-                        "(:id, :event, :cinema, :title, :start, :observed, :offset, "
+                        "(:id, :provider, :catalog, :event, :cinema, "
+                        ":title, :start, :observed, :offset, "
                         ":purpose, "
                         ":due, :deadline, :state) ON CONFLICT(id) DO UPDATE SET "
                         "source_observed_ms=excluded.source_observed_ms, "
@@ -119,6 +158,8 @@ def plan(engine: Engine, now: int, *, diagnostic: bool = False) -> int:
                     ),
                     {
                         "id": job_id,
+                        "provider": provider,
+                        "catalog": row["cinema_id"],
                         "event": event_id,
                         "cinema": cinema,
                         "title": row["title_raw"],
@@ -197,6 +238,8 @@ def claim(
                     "SELECT * FROM seat_jobs WHERE state='pending' AND due_at_ms <= "
                     ":now "
                     "AND (:diagnostic=0 OR purpose='diagnostic') "
+                    "AND provider IN (SELECT provider FROM seat_provider_status "
+                    "WHERE cooldown_until_ms<=:now) "
                     "ORDER BY deadline_ms, id LIMIT 1"
                 ),
                 {"now": now, "diagnostic": int(diagnostic_only)},
@@ -226,6 +269,33 @@ def claim(
 
 
 def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
+    if job.get("provider", "kinoteka") == "cinema_city":
+        empty = {
+            "available": None,
+            "unavailable": None,
+            "capacity": None,
+            "http_status": None,
+            "cooldown_ms": 0,
+        }
+        event = str(job["cinema_event"])
+        if (
+            job.get("cinema_id") != "1074"
+            or job["provider_cinema"] != "1074"
+            or not event.isdigit()
+        ):
+            return {**empty, "outcome": "invalid_data"}
+        city_result = city_probe(
+            client, f"https://tickets.cinema-city.pl/order/{event}"
+        )
+        return {
+            **empty,
+            **city_result,
+            "cooldown_ms": max(15 * MINUTE, city_result.get("cooldown_ms", 0))
+            if city_result["outcome"] == "blocked"
+            else 0,
+        }
+    if job.get("provider", "kinoteka") != "kinoteka":
+        raise ValueError("Unknown seat provider")
     # Validate again at the network boundary, even if the database was modified.
     cinema, event_id = str(UUID(job["provider_cinema"])), str(UUID(job["cinema_event"]))
     url = f"https://restapi.kinoteka.pl/api/cinema/{cinema}/screening/{event_id}/occupancy"
@@ -301,7 +371,15 @@ def finish(
                 "UPDATE seat_worker_status SET heartbeat_ms=:now, "
                 "cooldown_until_ms=max(cooldown_until_ms,:cooldown) WHERE id=1"
             ),
-            {"now": now, "cooldown": now + max(2000, result["cooldown_ms"])},
+            {"now": now, "cooldown": now + 2000},
+        )
+        connection.execute(
+            text(
+                "UPDATE seat_provider_status SET "
+                "cooldown_until_ms=max(cooldown_until_ms,:until) "
+                "WHERE provider=:provider"
+            ),
+            {"until": now + result["cooldown_ms"], "provider": job["provider"]},
         )
         return True
 
@@ -334,7 +412,8 @@ def status(engine: Engine) -> dict[str, Any]:
         latest = (
             connection.execute(
                 text(
-                    "SELECT j.title,j.starts_at_ms,j.offset_minutes,j.purpose,o.* "
+                    "SELECT j.provider,j.cinema_id,j.title,"
+                    "j.starts_at_ms,j.offset_minutes,j.purpose,o.* "
                     "FROM seat_observations o JOIN seat_jobs j ON j.id=o.job_id "
                     "ORDER BY o.attempted_at_ms DESC LIMIT 5"
                 )
@@ -343,7 +422,7 @@ def status(engine: Engine) -> dict[str, Any]:
             .all()
         )
         return {
-            "provider": "kinoteka",
+            "providers": list(PROVIDER_OFFSETS),
             "worker": worker,
             "jobs": jobs,
             "outcomes": outcomes,
@@ -359,6 +438,9 @@ def main() -> None:
         "command", choices=["run", "status", "probe-next", "export", "backup"]
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--cinema", choices=list(PROVIDERS), help="Diagnostic target only"
+    )
     args = parser.parse_args()
     path = args.database or Settings.from_environment().database_path
     if args.command == "backup":
@@ -395,7 +477,8 @@ def main() -> None:
                 rows = connection.execute(
                     text(
                         "SELECT "
-                        "j.cinema_event,j.title,j.starts_at_ms,j.offset_minutes,j.purpose,"
+                        "j.provider,j.cinema_id,j.cinema_event,j.title,"
+                        "j.starts_at_ms,j.offset_minutes,j.purpose,"
                         "o.* FROM seat_observations o JOIN seat_jobs j ON "
                         "j.id=o.job_id "
                         "ORDER BY o.attempted_at_ms"
@@ -415,7 +498,7 @@ def main() -> None:
                     )
             return
         diagnostic = args.command == "probe-next"
-        plan(engine, clock_ms(), diagnostic=diagnostic)
+        plan(engine, clock_ms(), diagnostic=diagnostic, cinema_id=args.cinema)
         last_plan = clock_ms()
         with httpx.Client(timeout=20, follow_redirects=False) as client:
             while not stop.is_set():
@@ -432,6 +515,8 @@ def main() -> None:
                             {
                                 "event": "seat_observation",
                                 "job_id": job["id"],
+                                "provider": job["provider"],
+                                "cinema_id": job["cinema_id"],
                                 "saved": saved,
                                 **result,
                             }

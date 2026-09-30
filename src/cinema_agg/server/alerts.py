@@ -13,6 +13,7 @@ from .database import database_engine, require_schema
 from .heartbeat import send_heartbeat
 from .pilot_health import ISSUE_HELP, local_time, report, safe_label
 from .seat_incidents import incident_message
+from .seat_providers import cinema_name
 from .settings import Settings
 
 RETRY_MS = 15 * 60_000
@@ -32,7 +33,8 @@ def format_alert_message(issue: str, data: dict[str, Any]) -> str:
         for row in rows[:3]:
             title = safe_label(row.get("title", "Unknown"))[:180]
             lines.append(
-                f"{title} | screening {local_time(row.get('starts_at_ms'))} "
+                f"{cinema_name(row.get('cinema_id', 'kinoteka'))} | {title} | "
+                f"screening {local_time(row.get('starts_at_ms'))} "
                 f"| T{row.get('offset_minutes', 0):+d}m"
             )
             if "outcome" in row:

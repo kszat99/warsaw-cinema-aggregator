@@ -1,5 +1,5 @@
 [Unit]
-Description=Kinoteka seat analytics pilot
+Description=Kinoteka and Arkadia seat analytics pilot
 After=network-online.target
 Wants=network-online.target
 

@@ -1,4 +1,4 @@
-"""Read-only Kinoteka pilot health report; never calls a cinema or changes jobs."""
+"""Read-only multi-cinema pilot health report; never calls a cinema or changes jobs."""
 
 import argparse
 import json
@@ -15,6 +15,7 @@ from .backups import candidates
 from .database import database_engine, require_schema
 from .heartbeat import latest_heartbeat
 from .seat_incidents import incidents
+from .seat_providers import NAMES, cinema_name
 from .settings import Settings
 
 MINUTE = 60_000
@@ -57,6 +58,24 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 .mappings()
                 .one()
             )
+            providers = [
+                dict(row)
+                for row in db.execute(
+                    text("SELECT * FROM seat_provider_status ORDER BY provider")
+                ).mappings()
+            ]
+            pending_by_cinema = dict(
+                db.execute(
+                    text(
+                        "SELECT cinema_id,count(*) FROM seat_jobs WHERE "
+                        "state='pending' "
+                        "AND due_at_ms>:now GROUP BY cinema_id"
+                    ),
+                    {"now": now},
+                )
+                .tuples()
+                .all()
+            )
             latest = (
                 db.execute(
                     text("SELECT * FROM fetch_runs ORDER BY started_at_ms DESC LIMIT 1")
@@ -91,11 +110,13 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 dict(row)
                 for row in db.execute(
                     text(
-                        "SELECT j.id,j.title,j.starts_at_ms,"
+                        "SELECT j.id,j.provider,j.cinema_id,j.title,j.starts_at_ms,"
                         "j.offset_minutes,j.purpose, "
                         "j.state,j.due_at_ms,j.deadline_ms,j.source_observed_ms, "
                         "min(CASE WHEN o.outcome='success' THEN "
                         "o.attempted_at_ms END) AS success_at, "
+                        "max(CASE WHEN o.outcome='closed' THEN 1 ELSE 0 "
+                        "END) AS closed, "
                         "min(o.attempted_at_ms) AS first_attempt "
                         "FROM seat_jobs j LEFT JOIN seat_observations o ON "
                         "o.job_id=j.id "
@@ -130,7 +151,8 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 dict(row)
                 for row in db.execute(
                     text(
-                        "SELECT j.id AS job_id,j.title,j.starts_at_ms,"
+                        "SELECT j.id AS job_id,j.provider,j.cinema_id,"
+                        "j.title,j.starts_at_ms,"
                         "j.offset_minutes, "
                         "j.purpose,j.state,j.due_at_ms,j.deadline_ms,o.id "
                         "AS attempt_id, "
@@ -147,7 +169,8 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 dict(row)
                 for row in db.execute(
                     text(
-                        "SELECT id,title,starts_at_ms,due_at_ms,offset_minutes,purpose "
+                        "SELECT id,provider,cinema_id,title,starts_at_ms,"
+                        "due_at_ms,offset_minutes,purpose "
                         "FROM seat_jobs WHERE state='pending' AND due_at_ms>:now "
                         "ORDER BY due_at_ms,id LIMIT 3"
                     ),
@@ -242,11 +265,13 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         issues.append("schedule_refresh_stuck")
     if overdue:
         issues.append("overdue_unfinished_jobs")
-    if worker["cooldown_until_ms"] > now + MINUTE:
+    if any(p["cooldown_until_ms"] > now + MINUTE for p in providers):
         issues.append("provider_cooldown")
     if backup["status"] != "ok":
         issues.append("backup_" + backup["status"])
-    failures = {k: v for k, v in outcomes.items() if k not in {"success", "running"}}
+    failures = {
+        k: v for k, v in outcomes.items() if k not in {"success", "running", "closed"}
+    }
     if failures:
         issues.append("seat_errors_in_window")
     missed = sum(j["state"] == "missed" for j in eligible)
@@ -257,7 +282,27 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     if any(j["state"] == "stale_source" for j in eligible):
         issues.append("jobs_with_stale_source")
     return {
-        "provider": "kinoteka",
+        "providers": providers,
+        "cinemas": [
+            {
+                "cinema_id": cid,
+                "name": name,
+                "successful_jobs": sum(
+                    j["success_at"] is not None
+                    for j in settled
+                    if j["cinema_id"] == cid
+                ),
+                "windows_finished": sum(j["cinema_id"] == cid for j in settled),
+                "closed_jobs": sum(
+                    bool(j["closed"]) for j in settled if j["cinema_id"] == cid
+                ),
+                "missed": sum(
+                    j["state"] == "missed" for j in eligible if j["cinema_id"] == cid
+                ),
+                "future_pending": pending_by_cinema.get(cid, 0),
+            }
+            for cid, name in NAMES.items()
+        ],
         "generated_at": datetime.fromtimestamp(now / 1000, UTC).isoformat(),
         "window_hours": hours,
         "status": "attention" if issues else "ok",
@@ -277,7 +322,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 a
                 for a in attempts
                 if a["purpose"] == "scheduled"
-                and a["outcome"] not in {"success", "running"}
+                and a["outcome"] not in {"success", "running", "closed"}
             ],
             "recent_attempts": attempts[:5],
             "upcoming": upcoming,
@@ -298,6 +343,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
             "excluded": len(jobs) - len(eligible),
             "windows_finished": len(settled),
             "successful_jobs": completed,
+            "closed_jobs": sum(bool(j["closed"]) for j in settled),
             "coverage_percent": round(100 * completed / len(settled), 1)
             if settled
             else None,
@@ -335,7 +381,8 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
         else (f"scheduled T{job['offset_minutes']:+d} minutes")
     )
     lines = [
-        f"  {safe_label(job['title'])}",
+        f"  {cinema_name(job.get('cinema_id', 'kinoteka'))} | "
+        f"{safe_label(job['title'])}",
         f"    Screening: {local_time(job['starts_at_ms'])} | {purpose}",
         f"    Planned: {local_time(job['due_at_ms'])}",
     ]
@@ -460,7 +507,7 @@ def render(data: dict[str, Any]) -> str:
     )
     evidence = data["evidence"]
     lines = [
-        f"KINOTEKA: {data['status'].upper()} | last {data['window_hours']} hours",
+        f"CINEMA PILOT: {data['status'].upper()} | last {data['window_hours']} hours",
         "All displayed times: Europe/Warsaw. "
         "ATTENTION includes historical problems in this window.",
         "Report generated: "
@@ -485,6 +532,11 @@ def render(data: dict[str, Any]) -> str:
             f"  Disk free: {storage['disk_free_bytes'] / 1024**3:.2f} / "
             f"{storage['disk_total_bytes'] / 1024**3:.2f} GiB"
         )
+    for provider in data.get("providers", []):
+        lines.append(
+            f"  {provider['provider']} cooldown until: "
+            f"{local_time(provider['cooldown_until_ms'])}"
+        )
     heartbeat = data.get("external_heartbeat")
     if heartbeat:
         lines.append(
@@ -505,6 +557,7 @@ def render(data: dict[str, Any]) -> str:
             continue
         lines.append(
             f"  {'RECOVERED' if recovery else 'UNRESOLVED'}: "
+            f"{cinema_name(incident.get('cinema_id', 'kinoteka'))} | "
             f"{safe_label(incident['title'])} | screening "
             f"{local_time(incident['starts_at_ms'])}"
         )
@@ -583,9 +636,17 @@ def render(data: dict[str, Any]) -> str:
             f"  Max attempt start delay: {age(seats['max_start_delay_seconds'])}s "
             "| allowance 120s",
             f"  Attempts: {json.dumps(seats['attempt_outcomes'], sort_keys=True)}",
-            "\nRECENT ATTEMPTS (latest 5 in window; warnings above include "
-            "older failures)",
         ]
+    )
+    for cinema in data.get("cinemas", []):
+        lines.append(
+            f"  {cinema['name']}: {cinema['successful_jobs']}/"
+            f"{cinema['windows_finished']} successful | "
+            f"confirmed closed: {cinema['closed_jobs']} | "
+            f"missed: {cinema['missed']} | pending: {cinema['future_pending']}"
+        )
+    lines.append(
+        "\nRECENT ATTEMPTS (latest 5 in window; warnings above include older failures)"
     )
     for item in evidence["recent_attempts"]:
         lines.extend(job_lines(item, attempt=True))
@@ -594,7 +655,8 @@ def render(data: dict[str, Any]) -> str:
     lines.append("\nNEXT CHECKS (up to 3)")
     for job in evidence["upcoming"]:
         lines.append(
-            f"  {local_time(job['due_at_ms'])} | {safe_label(job['title'])} "
+            f"  {local_time(job['due_at_ms'])} | "
+            f"{cinema_name(job['cinema_id'])} | {safe_label(job['title'])} "
             f"| screening {local_time(job['starts_at_ms'])} "
             f"| T{job['offset_minutes']:+d} minutes"
         )
@@ -625,7 +687,8 @@ def main() -> None:
         print(
             json.dumps({"status": "unavailable", "issues": ["health_report_failed"]})
             if args.json
-            else "KINOTEKA: UNAVAILABLE\nCannot read or validate the database/backup. "
+            else "CINEMA PILOT: UNAVAILABLE\n"
+            "Cannot read or validate the database/backup. "
             "Check file permissions, configured database path and schema version. "
             "This is a report failure, not evidence that cinema sales closed."
         )

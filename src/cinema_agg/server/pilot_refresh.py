@@ -1,4 +1,4 @@
-"""Linux-only refresh owner for the isolated Kinoteka pilot database."""
+"""Linux-only refresh owner for the isolated Kinoteka/Arkadia pilot database."""
 
 import asyncio
 import importlib
@@ -53,7 +53,7 @@ def main() -> None:
             ) as client:
                 return await collect(
                     path,
-                    ["kinoteka"],
+                    ["kinoteka", "1074"],
                     [today, today + timedelta(days=1)],
                     make_fetch(client),
                 )

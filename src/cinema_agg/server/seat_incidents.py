@@ -4,11 +4,14 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
+from .seat_providers import cinema_name
+
 
 def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
     rows = connection.execute(
         text(
-            "SELECT j.provider_cinema,j.cinema_event,j.starts_at_ms,j.title,"
+            "SELECT j.provider,j.cinema_id,j.provider_cinema,"
+            "j.cinema_event,j.starts_at_ms,j.title,"
             "j.id AS job_id,j.offset_minutes,"
             "o.id,o.attempted_at_ms,o.finished_at_ms,o.outcome,o.available,"
             "o.unavailable,o.capacity FROM seat_observations o "
@@ -19,18 +22,27 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
         {"now": now},
     ).mappings()
     result: list[dict[str, Any]] = []
-    active: dict[tuple[str, str, int], dict[str, Any]] = {}
+    active: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for row in rows:
-        key = (row["provider_cinema"], row["cinema_event"], row["starts_at_ms"])
+        key = (
+            row["provider"],
+            row["provider_cinema"],
+            row["cinema_event"],
+            row["starts_at_ms"],
+        )
         if row["outcome"] == "success":
             incident = active.pop(key, None)
             if incident is not None:
                 incident["recovery"] = dict(row)
             continue
+        if row["outcome"] == "closed":
+            continue  # Explicit sales closure is not a transport failure or recovery.
         if key not in active:
             incident = {
                 "fingerprint": "seat:" + row["id"],
                 "title": row["title"],
+                "cinema_id": row["cinema_id"],
+                "provider": row["provider"],
                 "starts_at_ms": row["starts_at_ms"],
                 "first_failure_ms": row["attempted_at_ms"],
                 "last_failure_ms": row["attempted_at_ms"],
@@ -55,6 +67,7 @@ def incident_message(incident: dict[str, Any]) -> str:
     headline = "RECOVERED: seat checks" if recovery else "SEAT CHECK FAILED"
     lines = [
         headline,
+        cinema_name(incident.get("cinema_id", "kinoteka")),
         safe_label(incident["title"])[:180],
         "Screening: " + local_time(incident["starts_at_ms"]),
         "First failed attempt: " + local_time(incident["first_failure_ms"]),

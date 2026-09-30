@@ -1,12 +1,23 @@
 # Warsaw Cinema Aggregator — Server App Roadmap
 
-Updated: 2026-09-30. **Status: Kinoteka seat-observation pilot running on the VPS.**
+Updated: 2026-09-30. **Status: Kinoteka and Cinema City Arkadia automatic collection deployed on the VPS.**
 
 This is the working plan for a maintainable server application and an L2/support/incident engineering portfolio project. Reliability must be demonstrated through measurements and recovery exercises. Smoke tests establish that sampled requests worked, not production guarantees.
 
 ## Resume here
 
-**Current checkpoint: Kinoteka seats are being collected on the VPS.** A systemd worker plans T-5/T/T+5/T+40 checks from fresh today/tomorrow schedules and stores observations in SQLite. The pilot has successfully fetched counts from the VPS, completed an automatic scheduled check, and survived a service restart without job duplication. See [seat-pilot runbook](docs/seat-pilot.md); run `sudo cinema-pilot-status` on the VPS. Other seat providers remain disabled. Telegram alerts and screening-specific recovery are deployed and verified. External heartbeat sending is deployed (first acknowledgement at 16:52 Warsaw); next: connect Healthchecks Telegram and verify missed-heartbeat/recovery notifications; review the first 24 hours before expanding providers individually. This is an isolated pilot, not the completed server app/public website migration. Historical credential rotation remains an owner item if live.
+**Current checkpoint, September 30:** Arkadia now
+uses automatic T-5/T/T+5/T+10 seat jobs; Kinoteka retains T-5/T/T+5/T+40. Shared schedule
+refresh fetches both venues today/tomorrow. Provider cooldowns are independent; status
+and existing Telegram failure/recovery alerts identify the cinema. Other venues remain
+disabled. Next: review Arkadia scheduled observations, burst delays and closure timing
+before expanding. Both Telegram integrations now use Cinema Alerts; the independent
+missed-heartbeat/recovery exercise remains outstanding. Public website unchanged.
+
+Observations are stored in SQLite. See the [seat-pilot runbook](docs/seat-pilot.md);
+run `sudo cinema-pilot-status` on the VPS. This remains an isolated pilot, not the
+completed server app/public website migration. Historical credential rotation remains
+an owner item if live.
 
 | Item | Current position |
 |---|---|
@@ -16,7 +27,7 @@ This is the working plan for a maintainable server application and an L2/support
 | VPS evidence | User-reported September 27 smoke results returned counts for 19 sampled cinemas across seven booking platforms |
 | Still unproven | Sustained multi-provider load, remaining fresh-session timings, complete host hardening, offsite restoration and independent outage detection |
 | Architecture | One VPS, FastAPI, SQLite, separate background processes, Nginx, systemd |
-| Current scope | Development API/database/collection plus an isolated Kinoteka seat pilot running on the VPS; public site unchanged |
+| Current scope | Development API/database/collection plus Kinoteka and Arkadia pilots on the VPS; public site unchanged |
 
 ### Storage/provider preparation checkpoint
 
@@ -26,23 +37,22 @@ validation precedes pruning. Status selects latest backup by modification time a
 shows DB/backup/disk totals, with low-space and backup-budget warnings. No screening
 or observation retention/deletion has been enabled. Offsite backups remain outstanding.
 
-Cinema City Arkadia readiness probe is implemented but NOT scheduled: September 29
+Cinema City Arkadia is now scheduled. Investigation history: September 29
 VPS schedule fetch returned 77 screenings for September 30; the earliest booking
 (Marsupilami 09:00, presentation 1717810) returned HTTP 403 at presentation lookup.
 The probe stopped. September 30: restored experiment request headers, accepted integer
 reservation metadata and corrected sparse seat-status parsing using the public frontend.
 Fresh VPS probe succeeded: 74 October 1 screenings; Odyseja 09:30, presentation 1709930,
 157 available / 29 unavailable / 186 capacity. Unavailable is not confirmed purchased.
-Next provider step: integrate Arkadia into provider-aware durable jobs, worker dispatch,
-refresh and health/alerts with T-5/T/T+5 plus research-derived T+10; then validate a
-controlled scheduled run before adding other venues. Unattended Cinema City is still
-disabled; this smoke test does not establish sustained coverage or every hall format.
+Provider-aware jobs, worker dispatch, refresh and health/alerts are now deployed for
+Arkadia. Activation skips earlier check windows instead of manufacturing startup misses.
+Next: validate sustained coverage and hall formats before adding other venues.
 
 ### Next implementation sessions
 
 1. **Independent outage detection:** Healthchecks free check selected (15-minute period,
    10-minute grace). Sender deployed after completed monitoring work, with 30-day local
-   attempt history. Connect external Telegram notifications next.
+   attempt history. Both Telegram integrations are connected to Cinema Alerts.
    Verify missed-heartbeat and recovery notifications without interrupting seat collection.
    Telegram delivery from the VPS cannot report loss of the VPS itself.
 2. **First 24-hour pilot review:** save a short evidence report covering schedule refreshes,
@@ -62,7 +72,7 @@ disabled; this smoke test does not establish sustained coverage or every hall fo
    freshness/error semantics first; mobile accessibility, usability and privacy-conscious
    visitor analytics remain planned. Public HTTPS and switch-over follow validation.
 
-Current implementation limits: the pilot remains Kinoteka-only; external notification integration/outage testing still pending,
+Current implementation limits: only Kinoteka and Arkadia enabled; external outage testing still pending,
 no automatic completed-seat-request retry, and no offsite backup yet. Incident reconstruction
 currently scans retained observations; incremental/indexed processing is needed before large
 history/multi-provider scale. The 15-minute Telegram timer controls notification latency.
@@ -72,7 +82,7 @@ history/multi-provider scale. The 15-minute Telegram timer controls notification
 - Development checkout: this repository folder, branch `codex/server-app`; roadmap/server-app edits remain separate from production.
 - Live checkout: `C:/Users/Kacper Szatkowski/.codex/worktrees/cinema-live-maintenance/warsaw-cinema-aggregator`, branch `main`, with its own Python environment. **Do not archive this worktree or switch its branch while the daily refresh task uses it.**
 - The existing Windows task retains its registered launcher path because Windows denied changing the task definition. The launcher reads `%LOCALAPPDATA%/WarsawCinemaAggregator/live_checkout.txt` and delegates to the live checkout before loading application code. Preserve this routing behavior when editing development scripts; an administrator can later point the task directly to the live checkout.
-- Daily fetching/publishing still uses the original frontend/adapters. Only explicitly reviewed maintenance fixes and generated data go to `main`; the full server-app website is not deployed; only the isolated Kinoteka background pilot runs on the VPS.
+- Daily fetching/publishing still uses the original frontend/adapters. Only explicitly reviewed maintenance fixes and generated data go to `main`; the full server-app website is not deployed; only the isolated Kinoteka/Arkadia background pilot runs on the VPS.
 - Refresh transcripts: `%LOCALAPPDATA%/WarsawCinemaAggregator/logs`. A successful local push triggers the existing Pages deployment; check that deployment separately.
 
 After each implementation session, update the phase status and handover log: completed work, exact commit, checks performed, remaining issue, and next small step. Record local and VPS status separately. Code existing is not enough to mark a phase complete.
@@ -576,6 +586,21 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30, Arkadia automatic collection: schema 0005_seat_providers adds provider
+and catalogue cinema identity, backfills existing jobs as Kinoteka, and stores independent
+activation/cooldown state. Existing Kinoteka IDs/history preserved. Shared refresh covers
+both venues today/tomorrow. Arkadia offsets -5/0/+5/+10; no checks before activation.
+403/429 pause that provider for at least 15 minutes (numeric Retry-After respected).
+Health reports coverage/pending/closure counts per cinema. Existing Telegram delivery
+includes named failures and same-screening recovery. Explicit closure keeps counts null,
+is not an error and cannot resolve an earlier failure without successful seat data.
+132 tests passed, plus strict lint/type/secret checks. Production migrated after a verified
+backup; worker and refresh/alert/backup timers active. Runbook contains rollout evidence.
+Refresh completed 09:39 Warsaw: 74 Arkadia screenings/day, 592 checks queued. Stored
+Lalka diagnostic succeeded (120/252/372); first automatic Arkadia checks due 09:55.
+Kinoteka scheduled collection continued at 09:40. Deployment test accepted by Telegram;
+alert evaluator and external heartbeat verified. Review the scheduled Arkadia results next.
 
 September 30, Cinema City readiness repaired: the new probe had diverged from the
 working experiment's headers and misinterpreted the sparse response. Restored headers,

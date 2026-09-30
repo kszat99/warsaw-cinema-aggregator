@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh Kinoteka pilot screenings
+Description=Refresh Kinoteka and Arkadia pilot screenings
 After=network-online.target
 Wants=network-online.target
 

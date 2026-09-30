@@ -87,6 +87,7 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
             return {
                 "outcome": "closed" if code == "TICKETING_ENDED" else "upstream_error",
                 "step": step,
+                "http_status": response.status_code,
             }
         presentation = data["presentation"]
         if type(presentation.get("id")) is not int or str(presentation["id"]) != event:
@@ -96,7 +97,7 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
                 "reason": "presentation_identity_mismatch",
             }
         if presentation.get("isTicketingAllowedDuringSaleWindow") is False:
-            return {"outcome": "closed", "step": step}
+            return {"outcome": "closed", "step": step, "http_status": 200}
 
         def identifier(key: str) -> str:
             value = presentation[key]
@@ -138,6 +139,7 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
         free = available_seats(layout, seats)
         return {
             "outcome": "success",
+            "http_status": 200,
             "available": free,
             "unavailable": capacity - free,
             "capacity": capacity,
@@ -145,10 +147,14 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
         }
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
+        retry = exc.response.headers.get("Retry-After", "")
         return {
             "outcome": "blocked" if status in {403, 429} else "upstream_error",
             "step": step,
             "http_status": status,
+            "cooldown_ms": max(15 * 60000, min(int(retry), 86400) * 1000)
+            if status in {403, 429} and retry.isdigit()
+            else 0,
         }
     except httpx.TimeoutException:
         return {"outcome": "timeout", "step": step}
