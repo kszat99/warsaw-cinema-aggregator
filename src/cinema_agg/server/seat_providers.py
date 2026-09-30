@@ -2,12 +2,21 @@
 
 import ssl
 
-PROVIDERS = {"kinoteka": "kinoteka", "1074": "cinema_city"}
-OFFSETS = {"kinoteka": (-5, 0, 5, 40), "cinema_city": (-5, 0, 5, 10)}
-NAMES = {"kinoteka": "Kinoteka", "1074": "Cinema City Arkadia"}
+PROVIDERS = {"kinoteka": "kinoteka", "1074": "cinema_city", "wisla": "msi_wisla"}
+OFFSETS = {
+    "kinoteka": (-5, 0, 5, 40),
+    "cinema_city": (-5, 0, 5, 10),
+    "msi_wisla": (-5, 0, 5),
+}
+NAMES = {
+    "kinoteka": "Kinoteka",
+    "1074": "Cinema City Arkadia",
+    "wisla": "Novekino Wisła",
+}
 RETRY_DELAY_MS = 30_000
-# One 20s request for Kinoteka; three sequential 20s requests for Cinema City.
-RETRY_BUDGET_MS = {"kinoteka": 20_000, "cinema_city": 60_000}
+# Kinoteka/City reserve their request budgets. Wisla's 120s reserve prevents
+# immediate retries inside the 120s job window during this initial session pilot.
+RETRY_BUDGET_MS = {"kinoteka": 20_000, "cinema_city": 60_000, "msi_wisla": 120_000}
 
 
 def cinema_name(cinema_id: str) -> str:

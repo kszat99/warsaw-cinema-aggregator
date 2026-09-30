@@ -53,7 +53,7 @@ def main() -> None:
             ) as client:
                 return await collect(
                     path,
-                    ["kinoteka", "1074"],
+                    ["kinoteka", "1074", "wisla"],
                     [today, today + timedelta(days=1)],
                     make_fetch(client),
                 )

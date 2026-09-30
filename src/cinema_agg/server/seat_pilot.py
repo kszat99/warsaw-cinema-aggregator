@@ -28,6 +28,8 @@ from .seat_providers import (
     transport_outcome,
 )
 from .settings import Settings
+from .wisla_probe import event_identity
+from .wisla_probe import probe as wisla_probe
 
 MINUTE = 60000
 FRESHNESS = 48 * 60 * MINUTE
@@ -49,6 +51,8 @@ def booking_identity(url: str) -> tuple[str, str]:
 
 
 def job_identity(cinema_id: str, url: str) -> tuple[str, str]:
+    if cinema_id == "wisla":
+        return "wisla", event_identity(url)
     if cinema_id == "1074":
         return "1074", presentation_id(url)
     if cinema_id == "kinoteka":
@@ -71,7 +75,7 @@ def plan(
                     "screenings "
                     "WHERE snapshot_id=(SELECT id FROM imports ORDER BY "
                     "generated_at_ms DESC LIMIT 1) "
-                    "AND cinema_id IN ('kinoteka','1074') AND "
+                    "AND cinema_id IN ('kinoteka','1074','wisla') AND "
                     "(:cinema_id IS NULL OR cinema_id=:cinema_id) "
                     "AND starts_at_ms >= :oldest "
                     "AND starts_at_ms <= :horizon AND scraped_at_ms >= :fresh "
@@ -88,6 +92,13 @@ def plan(
             .all()
         )
         for provider in {PROVIDERS[row["cinema_id"]] for row in rows}:
+            connection.execute(
+                text(
+                    "INSERT INTO seat_provider_status(provider,cooldown_until_ms) "
+                    "VALUES (:provider,0) ON CONFLICT(provider) DO NOTHING"
+                ),
+                {"provider": provider},
+            )
             connection.execute(
                 text(
                     "UPDATE seat_provider_status SET activated_at_ms=:now "
@@ -217,11 +228,13 @@ def claim(
             text(
                 "UPDATE seat_jobs SET state='done' WHERE state='pending' "
                 "AND retry_at_ms IS NOT NULL AND deadline_ms < :now + "
-                "CASE provider WHEN 'cinema_city' THEN :city ELSE :kinoteka END"
+                "CASE provider WHEN 'cinema_city' THEN :city "
+                "WHEN 'msi_wisla' THEN :wisla ELSE :kinoteka END"
             ),
             {
                 "now": now,
                 "city": RETRY_BUDGET_MS["cinema_city"],
+                "wisla": RETRY_BUDGET_MS["msi_wisla"],
                 "kinoteka": RETRY_BUDGET_MS["kinoteka"],
             },
         )
@@ -287,6 +300,10 @@ def claim(
 
 
 def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
+    if job.get("provider") == "msi_wisla":
+        if job.get("cinema_id") != "wisla" or job["provider_cinema"] != "wisla":
+            raise ValueError("Invalid Wisla cinema")
+        return wisla_probe(client, str(job["cinema_event"]), job["starts_at_ms"])
     if job.get("provider", "kinoteka") == "cinema_city":
         empty = {
             "available": None,

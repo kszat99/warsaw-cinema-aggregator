@@ -6,6 +6,11 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+Wisła pilot deployed: October 1 Kura at 10:00 verified 103 available / 17 unavailable /
+120 capacity through a saved production diagnostic. All 15 tomorrow screenings have
+45 pending T-5/T/T+5 checks; first at 09:55 Warsaw. Refresh includes Wisła from the next
+timer run. Missing MSI pages remain technical failures, not confirmed closures.
+
 September 30 evening maintenance: schedule-count validation and refresh alert clarity
 corrected; see the latest handover entry. Seven-hour stale warnings concern the last
 fully accepted schedule run, not a seven-hour interruption in seat collection.
@@ -609,6 +614,28 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30, Wisła pilot: fresh MSI session requires date-specific returnlink; a
+missing returnlink caused a generic error and was not treated as closed. Production
+probe now restricts redirects to the HTTPS Wisła MSI origin, posts only framework
+hidden state, validates count labels against unique available seat controls, and
+clears cookies between jobs. Independent msi_wisla cooldown; T-5/T/T+5 jobs;
+immediate retries conservatively disabled for this initial multi-request flow.
+Tomorrow's 15 screenings imported without touching current venue data; 45 pending
+scheduled jobs verified, one saved diagnostic returned 103/17/120 for Kura 10:00.
+First checks October 1 at 09:55, 10:00 and 10:05 Warsaw. Existing failure/recovery alerts
+and backups cover these records. Health OK with 398/398 prior finished windows
+successful at 21:48; Wisła diagnostics excluded from scheduled coverage. 174 tests pass,
+strict lint/types/source secrets checks pass. Overnight timing and closure behaviour
+remain unproven. Security changes deferred at owner request; review retained as notes.
+
+September 30, read-only host review: public CUPS TCP/631 verified from the PC; host
+firewall inactive/accept-all, SSH passwords enabled, maintenance reboot pending, and
+pilot state directory/database are 0755/0644 (unit StateDirectoryMode defaults 0755).
+Root-only credentials and restricted service account/hardening verified. No server
+changes or restarts. See [security review](docs/security-review-20260930.md).
+Next hardening priority: unnecessary printing exposure and staged SSH-safe firewall;
+then data permissions, authentication and a planned maintenance reboot.
 
 September 30 evening, schedule alert correction: Arkadia's 20:10 response had 15
 screenings versus 52 earlier, but exactly 15 earlier screenings were still upcoming.

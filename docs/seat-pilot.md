@@ -335,3 +335,25 @@ separate seat-collection evidence. Recovery reports the actual latest refresh st
 After investigating the cause, rerun with:
 sudo systemctl start cinema-pilot-refresh.service
 This uses the existing pacing and lock; do not restart the seat worker for schedule warnings.
+
+## Novekino Wisła pilot
+
+Wisła uses its own msi_wisla provider budget/cooldown and durable T-5/T/T+5 jobs.
+Each observation opens a fresh MSI session: repertoire GET, Default.aspx GET with
+date-specific returnlink, hidden ASP.NET state POST, and same-origin redirect to
+OrderTickets.aspx. No seat identifiers are posted, and cookies are cleared after
+every observation. TLS verification remains enabled. Counts require both explicit
+capacity/availability labels and matching unique available checkbox controls.
+Missing handshakes/maps or mismatches are invalid_data, never closed or zero seats.
+Closure recognition remains unproven; a T+5 technical failure may need review.
+
+The initial pilot does not immediately retry Wisła failures: its conservative 120s
+retry reserve exceeds the remaining window after the retry delay. Later offsets
+remain independent checks, and normal incident recovery can close an earlier failure.
+403/429 applies an independent minimum 15-minute cooldown; numeric Retry-After is
+honoured. Redirects are limited and restricted to the Wisła HTTPS MSI origin.
+Per-request timeout is 10 seconds. Other MSI venues remain disabled.
+
+Schedule refresh includes Wisła today/tomorrow from the next regular run. Initial
+September 30 evening seed fetches only October 1 (September 30 bookings have ended);
+it preserves the already accepted Kinoteka and Arkadia snapshots.

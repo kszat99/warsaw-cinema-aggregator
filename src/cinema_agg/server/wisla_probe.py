@@ -1,0 +1,143 @@
+"""Fresh MSI session, hidden-state handshake only; never selects seats."""
+
+import re
+from datetime import datetime
+from typing import Any
+from urllib.parse import parse_qs, urlencode, urlsplit
+from zoneinfo import ZoneInfo
+
+import httpx
+from bs4 import BeautifulSoup
+
+from .seat_providers import transport_outcome
+
+ORIGIN = "https://wisla.novekino.pl"
+
+
+def event_identity(url: str) -> str:
+    parts = urlsplit(url)
+    query = parse_qs(parts.query)
+    ids = query.get("event_id", [])
+    if (
+        parts.scheme != "https"
+        or parts.netloc != "wisla.novekino.pl"
+        or parts.path not in {"/MSI/OrderTickets.aspx", "/MSI/Default.aspx"}
+        or len(ids) != 1
+        or not re.fullmatch(r"[0-9]{1,12}", ids[0])
+    ):
+        raise ValueError("Unapproved Wisla booking identity")
+    return ids[0]
+
+
+def request(
+    client: httpx.Client, method: str, url: str, **kwargs: Any
+) -> httpx.Response:
+    for _ in range(2):
+        if not url.startswith(ORIGIN + "/MSI/"):
+            raise ValueError("Unapproved redirect")
+        response = client.request(
+            method, url, follow_redirects=False, timeout=10, **kwargs
+        )
+        if response.status_code not in {301, 302, 303}:
+            response.raise_for_status()
+            return response
+        url = str(response.url.join(response.headers["location"]))
+        method, kwargs = "GET", {}
+    raise ValueError("Redirect limit")
+
+
+def parse(response: httpx.Response) -> dict[str, Any]:
+    if response.url.path != "/MSI/OrderTickets.aspx":
+        raise ValueError("Seat page unavailable; closure not established")
+    soup = BeautifulSoup(response.text, "lxml")
+    text = soup.get_text(" ", strip=True)
+    total = re.search(r"Miejsc\s+łącznie\s*:\s*(\d+)", text, re.I)
+    free = re.search(r"Dostępnych\s+miejsc\s*:\s*(\d+)", text, re.I)
+    if not total or not free:
+        raise ValueError("Missing capacity markers")
+    capacity, available = int(total[1]), int(free[1])
+    seats = soup.select('input[type="checkbox"][id*="seatCheckbox"]')
+    ids = [seat.get("id") for seat in seats]
+    if (
+        not 0 < capacity <= 5000
+        or not 0 <= available <= capacity
+        or len(ids) != len(set(ids))
+        or len(seats) != available
+        or any(seat.has_attr("disabled") for seat in seats)
+    ):
+        raise ValueError("Seat counts disagree")
+    return dict(
+        outcome="success",
+        available=available,
+        unavailable=capacity - available,
+        capacity=capacity,
+    )
+
+
+def probe(client: httpx.Client, event: str, start_ms: int) -> dict[str, Any]:
+    result: dict[str, Any] = dict(
+        available=None, unavailable=None, capacity=None, http_status=None, cooldown_ms=0
+    )
+    client.cookies.clear()
+    try:
+        if not re.fullmatch(r"[0-9]{1,12}", event):
+            raise ValueError("Invalid event")
+        day = datetime.fromtimestamp(start_ms / 1000, ZoneInfo("Europe/Warsaw")).date()
+        repertoire = (
+            ORIGIN
+            + "/MSI/mvc/pl?"
+            + urlencode(dict(sort="Date", date=day.isoformat(), datestart="0"))
+        )
+        entry = (
+            ORIGIN
+            + "/MSI/Default.aspx?"
+            + urlencode(
+                dict(
+                    event_id=event,
+                    typetran="0",
+                    returnlink="~/mvc/pl?sort=Date&date=" + day.isoformat(),
+                )
+            )
+        )
+        request(client, "GET", repertoire)
+        landing = request(client, "GET", entry, headers={"Referer": repertoire})
+        soup = BeautifulSoup(landing.text, "lxml")
+        values = {
+            str(n["name"]): str(n.get("value", ""))
+            for n in soup.select('form input[type="hidden"][name]')
+        }
+        # Restrict the POST to framework state; never echo seat/payment controls.
+        values = {
+            k: v
+            for k, v in values.items()
+            if k.startswith("__") or k.endswith("hfldUniqueTabGuid")
+        }
+        random = soup.select_one("#randomWindowName")
+        field = next((k for k in values if k.endswith("hfldUniqueTabGuid")), None)
+        if random is None or not random.get("value") or field is None:
+            raise ValueError("Session handshake unavailable")
+        values[field] = str(random["value"])
+        response = request(
+            client, "POST", entry, data=values, headers={"Referer": str(landing.url)}
+        )
+        result.update(http_status=response.status_code, **parse(response))
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        result.update(
+            http_status=status,
+            outcome="blocked" if status in {403, 429} else "http_error",
+        )
+        if status in {403, 429}:
+            retry = exc.response.headers.get("Retry-After", "")
+            result["cooldown_ms"] = max(
+                900000, int(retry) * 1000 if retry.isdigit() else 0
+            )
+    except httpx.TimeoutException:
+        result["outcome"] = "timeout"
+    except httpx.HTTPError as exc:
+        result["outcome"] = transport_outcome(exc)
+    except (ValueError, KeyError, TypeError):
+        result["outcome"] = "invalid_data"
+    finally:
+        client.cookies.clear()
+    return result
