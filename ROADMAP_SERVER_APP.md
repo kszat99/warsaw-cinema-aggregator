@@ -599,7 +599,14 @@ inflate coverage. TLS transport causes are separated from retryable network fail
 Status and Telegram distinguish same-window retry recovery from later-offset recovery.
 Migration deployed after an integrity-checked backup; Kinoteka/Arkadia schedules retained.
 17 focused retry tests cover both providers, restart, timing limits, fencing, exclusions,
-cooldown, late response, coverage and deduplicated alerts. Full suite and CI recorded below.
+cooldown, late response, coverage and deduplicated alerts. Code release `535b234` passed
+all CI jobs (149 tests across Linux 3.12/3.13 and Windows 3.13, plus security checks):
+[validation run](https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36686394109).
+Live verification: five Arkadia scheduled T-5 checks succeeded at 09:55:04–09:55:25 Warsaw
+(Luna i rozgadana świnka, Lalka, Pucio kocha zwierzaki, Zapomniana wyspa, Resident Evil).
+No overdue jobs or active incidents. Alert evaluator and external heartbeat succeeded
+09:54:43. No live transient failure was forced; automatic retry remains validated by
+injected offline failures until a natural live failure occurs. Continue the 24-hour pilot.
 
 September 30, Arkadia automatic collection: schema 0005_seat_providers adds provider
 and catalogue cinema identity, backfills existing jobs as Kinoteka, and stores independent

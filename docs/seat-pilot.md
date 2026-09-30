@@ -216,6 +216,11 @@ September 30 retry rollout: pre-upgrade backup
 `/home/ubuntu/cinema-pilot-rollback-00df19f/`. Existing jobs/observations preserved;
 worker and all timers restarted after the schema migration. Retry behavior is verified
 with offline injected failures; no artificial outages were introduced into live jobs.
+Release `535b234` passed all GitHub CI jobs (149 tests). After deployment, the first
+five Arkadia scheduled checks succeeded between 09:55:04 and 09:55:25 Warsaw, with
+no overdue jobs or active incidents. All five succeeded on their first attempt; this
+verifies scheduled dispatch after migration, not a live retry recovery. External
+heartbeat and alert evaluation also succeeded at 09:54:43.
 
 In the VPS SSH terminal:
 
