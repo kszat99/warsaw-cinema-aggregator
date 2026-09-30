@@ -1,6 +1,6 @@
 # Warsaw Cinema Aggregator — Server App Roadmap
 
-Updated: 2026-09-30. **Status: Kinoteka and Cinema City Arkadia automatic collection deployed on the VPS.**
+Updated: 2026-09-30. **Status: Kinoteka, Cinema City Arkadia and Novekino Wisła automatic collection deployed on the VPS.**
 
 This is the working plan for a maintainable server application and an L2/support/incident engineering portfolio project. Reliability must be demonstrated through measurements and recovery exercises. Smoke tests establish that sampled requests worked, not production guarantees.
 
@@ -626,7 +626,9 @@ scheduled jobs verified, one saved diagnostic returned 103/17/120 for Kura 10:00
 First checks October 1 at 09:55, 10:00 and 10:05 Warsaw. Existing failure/recovery alerts
 and backups cover these records. Health OK with 398/398 prior finished windows
 successful at 21:48; Wisła diagnostics excluded from scheduled coverage. 174 tests pass,
-strict lint/types/source secrets checks pass. Overnight timing and closure behaviour
+strict lint/types/source secrets checks pass. Release 2386937 deployed; all Linux/Windows
+and security CI passed: https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36768319956.
+Overnight timing and closure behaviour
 remain unproven. Security changes deferred at owner request; review retained as notes.
 
 September 30, read-only host review: public CUPS TCP/631 verified from the PC; host
