@@ -26,9 +26,11 @@ automated offsite upload and cloud-download restore are not enabled/verified yet
 Owner has now created the B2 account, private encrypted bucket and scoped application
 key. Installed `sudo cinema-configure-offsite-backup` on the VPS: interactive hidden
 credential prompts, confirmation, atomic exclusive write to root-only (0600)
-`/etc/warsaw-cinema/offsite-backup.json`. Owner must run it; credentials must not enter
-chat or Git. Next: verify scoped access, implement uploads/retention/alerts and test a
-cloud-download restore. Setup helper alone does not enable uploads.
+`/etc/warsaw-cinema/offsite-backup.json`. Owner completed setup; credentials never
+entered chat or Git. Live B2 v4 authentication and bucket listing succeeded (HTTP 200);
+key restricted to exactly the configured bucket, with list/read/write/delete permissions.
+Root ownership and mode 0600 verified. Next: implement uploads/retention/alerts and test
+a cloud-download restore. No cloud upload has been tested or scheduled yet.
 
 Observations are stored in SQLite. See the [seat-pilot runbook](docs/seat-pilot.md);
 run `sudo cinema-pilot-status` on the VPS. This remains an isolated pilot, not the
