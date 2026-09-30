@@ -27,10 +27,22 @@ protected copies or the live database. This is local retention, not offsite back
 selects the earliest screening and attempts the read-only presentation/layout/status
 flow. It neither inserts jobs in the Kinoteka database nor enables another worker.
 It stops on 403/429, uses validated booking origins and does not classify generic
-HTTP errors or empty maps as confirmed closure. Layout/status cardinalities must match.
+HTTP errors or empty maps as confirmed closure. Status keys must belong to the layout;
+the status response is sparse: every returned coordinate is available, while omitted
+coordinates are unavailable. Values are ticket metadata, not occupied/free flags.
 September 29 VPS result: 77 September 30 screenings fetched; Marsupilami at 09:00
 (`1717810`) returned 403 at the presentation step. No seat counts were obtained.
-Unattended Cinema City remains disabled until a reviewed VPS readiness check succeeds.
+September 30 correction: restored the experiment's User-Agent/Accept headers, accepted
+integer reservation metadata and corrected sparse status parsing. The site's public
+`_nuxt/5506d9d.js` functions `updateSelectedPresentationSeats` and
+`updateSelectedPresentationSeatsStatus` confirm these semantics. VPS readiness now
+succeeds: 74 October 1 screenings; Odyseja at 09:30, presentation 1709930,
+157 available / 29 unavailable / 186 capacity.
+[Booking](https://tickets.cinema-city.pl/api/order/1709930?lang=pl).
+Unavailable does not mean purchased; counts also precede any UI-specific isolated-seat
+selection restrictions. This sample proves access/count parsing, not sustained coverage.
+Unattended Cinema City remains disabled pending provider-aware jobs, offsets and
+worker/alert integration; the existing Kinoteka worker remains unchanged.
 
 `cinema-pilot-status` and `cinema-pilot-health` now show the same full report.
 WHY THIS STATUS explains every warning first. All affected jobs and failed scheduled

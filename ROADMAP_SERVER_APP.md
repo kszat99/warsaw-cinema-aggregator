@@ -1,6 +1,6 @@
 # Warsaw Cinema Aggregator — Server App Roadmap
 
-Updated: 2026-09-29. **Status: Kinoteka seat-observation pilot running on the VPS.**
+Updated: 2026-09-30. **Status: Kinoteka seat-observation pilot running on the VPS.**
 
 This is the working plan for a maintainable server application and an L2/support/incident engineering portfolio project. Reliability must be demonstrated through measurements and recovery exercises. Smoke tests establish that sampled requests worked, not production guarantees.
 
@@ -29,9 +29,14 @@ or observation retention/deletion has been enabled. Offsite backups remain outst
 Cinema City Arkadia readiness probe is implemented but NOT scheduled: September 29
 VPS schedule fetch returned 77 screenings for September 30; the earliest booking
 (Marsupilami 09:00, presentation 1717810) returned HTTP 403 at presentation lookup.
-The probe stopped; counts and overnight collection are not validated for Cinema City.
-Next provider step: investigate that response against the earlier successful transport
-evidence before activation. Do not infer all VPS access is blocked from this one result.
+The probe stopped. September 30: restored experiment request headers, accepted integer
+reservation metadata and corrected sparse seat-status parsing using the public frontend.
+Fresh VPS probe succeeded: 74 October 1 screenings; Odyseja 09:30, presentation 1709930,
+157 available / 29 unavailable / 186 capacity. Unavailable is not confirmed purchased.
+Next provider step: integrate Arkadia into provider-aware durable jobs, worker dispatch,
+refresh and health/alerts with T-5/T/T+5 plus research-derived T+10; then validate a
+controlled scheduled run before adding other venues. Unattended Cinema City is still
+disabled; this smoke test does not establish sustained coverage or every hall format.
 
 ### Next implementation sessions
 
@@ -571,6 +576,17 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+September 30, Cinema City readiness repaired: the new probe had diverged from the
+working experiment's headers and misinterpreted the sparse response. Restored headers,
+validated presentation identity and reservation metadata, matched status coordinates
+against physical layout, and counted returned coordinates as available regardless of
+ticket-group metadata. Unknown coordinates or malformed data remain unknown, not zero.
+Read-only VPS sample succeeded (details above); no booking/seat-selection operations,
+scheduled provider activation or public-site changes. Regression tests cover sparse
+and empty availability, nonzero metadata, wrong event, and integer/boolean flags.
+User-reported Kinoteka coverage: 128/132 successful windows, three startup misses,
+one historical network failure and no overdue jobs; continue monitoring while expanding.
 
 September 29, storage and second-provider preparation: deployed managed backup rotation,
 latest-backup selection fix and disk/backup-budget reporting. First managed backup

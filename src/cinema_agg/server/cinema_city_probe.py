@@ -26,21 +26,48 @@ def presentation_id(url: str) -> str:
     return match[1]
 
 
-def count_seats(node: Any) -> int:
-    if isinstance(node, dict):
-        seat = (
-            "tg" in node and "n" in node and not any(k in node for k in ("G", "R", "S"))
-        )
-        return int(seat) + sum(count_seats(value) for value in node.values())
-    if isinstance(node, list):
-        return sum(count_seats(value) for value in node)
-    return 0
+def layout_seats(node: Any) -> set[str]:
+    """Match the site's section/group/row/seat coordinates, not recursive guesses."""
+    keys: set[str] = set()
+    for section_id, section in node["S"].items():
+        for group in section["G"].values():
+            for y, row in group["R"].items():
+                for x, seat in row["S"].items():
+                    if (
+                        not isinstance(seat, dict)
+                        or "tg" not in seat
+                        or "n" not in seat
+                    ):
+                        raise ValueError("Invalid layout seat")
+                    key = f"{section_id}_{x}_{y}"
+                    if key in keys:
+                        raise ValueError("Ambiguous seat coordinates")
+                    keys.add(key)
+    if not 0 < len(keys) <= 5000:
+        raise ValueError("Invalid layout capacity")
+    return keys
+
+
+def available_seats(layout: set[str], seats: Any) -> int:
+    # The public site starts layout seats unavailable, then marks EVERY returned
+    # status key available. Values encode ticket-group/additional metadata, not
+    # occupied/free flags. Omitted coordinates remain unavailable.
+    if not isinstance(seats, dict) or not set(seats).issubset(layout):
+        raise ValueError("Seat statuses do not match layout")
+    for value in seats.values():
+        if type(value) is int and value >= 0:
+            continue
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+(?:,[0-9]+)?", value):
+            continue
+        raise ValueError("Invalid seat metadata")
+    return len(seats)
 
 
 def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
     event = presentation_id(booking)
     headers = {
-        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json, text/plain, */*",
         "Origin": ORIGIN,
         "Referer": f"{ORIGIN}/order/{event}",
         "uuid": str(uuid4()),
@@ -62,6 +89,12 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
                 "step": step,
             }
         presentation = data["presentation"]
+        if type(presentation.get("id")) is not int or str(presentation["id"]) != event:
+            return {
+                "outcome": "invalid_data",
+                "step": step,
+                "reason": "presentation_identity_mismatch",
+            }
         if presentation.get("isTicketingAllowedDuringSaleWindow") is False:
             return {"outcome": "closed", "step": step}
 
@@ -75,7 +108,7 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
             identifier(k) for k in ("venueId", "seatplanId", "venueTypeId")
         )
         reserved = presentation.get("isReserved")
-        if type(reserved) is not bool:
+        if type(reserved) not in {bool, int} or reserved not in (0, 1):
             raise ValueError("Missing reservation metadata")
         step = "seatplan"
         # This POST reads layout only; no seat selection or reservation endpoint.
@@ -87,7 +120,8 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
             follow_redirects=False,
         )
         response.raise_for_status()
-        capacity = count_seats(response.json())
+        layout = layout_seats(response.json())
+        capacity = len(layout)
         step = "seat_status"
         response = client.get(
             f"{ORIGIN}/api/seats/seats-statusV2",
@@ -101,19 +135,7 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
         )
         response.raise_for_status()
         seats = response.json()["seats"]
-        if (
-            not isinstance(seats, dict)
-            or not 0 < capacity <= 5000
-            or len(seats) != capacity
-            or any(type(v) is not int or v < 0 for v in seats.values())
-        ):
-            return {
-                "outcome": "invalid_data",
-                "step": step,
-                "layout_capacity": capacity,
-                "status_count": len(seats) if isinstance(seats, dict) else None,
-            }
-        free = sum(v == 0 for v in seats.values())
+        free = available_seats(layout, seats)
         return {
             "outcome": "success",
             "available": free,
