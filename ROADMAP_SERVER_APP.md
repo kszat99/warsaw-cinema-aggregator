@@ -6,6 +6,16 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1 18:53 incident review: Novekino showtime unavailability repeats;
+Amondo Do utraty tchu returned 20/0/20 at T-2, then listing_absent at T0/T+5.
+This establishes disappearance from repertoire, not direct sales closure.
+Both Cinema City HTTP 500 incidents recovered (Odyseja via same-window retry;
+Resident Evil at later offset). Worker restarted at 17:12:41 after SQLITE_BUSY
+while checking journal mode during connection setup, outside BEGIN retries.
+Add two bounded setup-check retries, close connections on failed initialization,
+and retain all original incident evidence. No cutoff observations are disabled.
+
+
 October 1 Amondo integration: dedicated independently paced provider queue;
 read-only repertoire, salesInfo and seat-layout requests. Exact organizer/show/start
 matching prevents selecting a different screening. Historical offsets plus T-5,

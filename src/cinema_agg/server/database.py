@@ -11,6 +11,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
 SCHEMA_REVISION = "0009_refresh_failure"
+BUSY_TIMEOUT_MS = 5000
 
 
 class SchemaUnavailable(Exception):
@@ -27,15 +28,41 @@ def database_engine(path: Path, *, readonly: bool, create: bool = False) -> Engi
             uri=True,
             check_same_thread=False,
             isolation_level=None,
-            timeout=5,
+            timeout=BUSY_TIMEOUT_MS / 1000,
         )
-        connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=5000")
-        if readonly:
-            connection.execute("PRAGMA query_only=ON")
-        elif connection.execute("PRAGMA journal_mode").fetchone()[0] != "delete":
+        try:
+            connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+            if readonly:
+                connection.execute("PRAGMA query_only=ON")
+            else:
+                # A concurrent writer can hold an exclusive lock even before BEGIN.
+                # Only retry this read-only setup check; never replay mutations.
+                for attempt in range(3):
+                    try:
+                        journal_mode = connection.execute(
+                            "PRAGMA journal_mode"
+                        ).fetchone()[0]
+                        break
+                    except sqlite3.OperationalError as exc:
+                        code = getattr(exc, "sqlite_errorcode", None)
+                        if (
+                            code is None
+                            or code & 255 != sqlite3.SQLITE_BUSY
+                            or attempt == 2
+                        ):
+                            raise
+                        logging.getLogger(__name__).warning(
+                            "database_connection_lock_wait retry=%s max_retries=2",
+                            attempt + 1,
+                        )
+                if journal_mode != "delete":
+                    raise SchemaUnavailable(
+                        "This local slice requires DELETE journal mode."
+                    )
+        except BaseException:
             connection.close()
-            raise SchemaUnavailable("This local slice requires DELETE journal mode.")
+            raise
         return connection
 
     engine = create_engine("sqlite://", creator=connect, poolclass=NullPool)
