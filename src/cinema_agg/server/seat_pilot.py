@@ -152,7 +152,10 @@ def plan(
                 )
             except (ValueError, TypeError):
                 continue
-            if len(starts_by_event[(cinema, event_id)]) != 1:
+            if (
+                row["cinema_id"] != "amondo"
+                and len(starts_by_event[(cinema, event_id)]) != 1
+            ):
                 connection.execute(
                     text(
                         "UPDATE seat_jobs SET state='identity_conflict' "
@@ -167,7 +170,7 @@ def plan(
                 text(
                     "UPDATE seat_jobs SET state='superseded' WHERE cinema_event=:event "
                     "AND provider_cinema=:cinema AND starts_at_ms != :start AND "
-                    "state='pending'"
+                    "state='pending' AND provider != 'amondo'"
                 ),
                 {"event": event_id, "cinema": cinema, "start": row["starts_at_ms"]},
             )

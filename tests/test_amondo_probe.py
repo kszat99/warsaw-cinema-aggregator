@@ -94,3 +94,19 @@ def test_background_plan_and_persistence(engine):
     assert finish(engine,job,result,NOW+1000)
     with engine.connect() as db:
         assert db.execute(text("SELECT diagnostics_json FROM seat_observations WHERE job_id=:id"),{'id':job['id']}).scalar_one()
+
+
+def test_same_show_on_two_dates_creates_independent_jobs(engine):
+    with engine.begin() as db:
+        for ordinal, start in [(10, NOW+60*MINUTE),(11,NOW+25*60*MINUTE)]:
+            db.execute(text("""INSERT INTO screenings
+                SELECT snapshot_id,:ordinal,'amondo','Kino Amondo',title_raw,title_norm,
+                :start,scraped_at_ms,duration_min,language,tags,
+                'https://kicket.com/embeddables/repertoire?organizerId=1772&showId=33127',poster_url
+                FROM screenings WHERE cinema_id='kinoteka'"""), {'ordinal':ordinal,'start':start})
+    plan(engine,NOW,cinema_id='amondo')
+    plan(engine,NOW,cinema_id='amondo')
+    with engine.connect() as db:
+        rows=db.execute(text("SELECT starts_at_ms,state,count(*) FROM seat_jobs WHERE cinema_id='amondo' GROUP BY starts_at_ms,state")).all()
+    assert len(rows)==2
+    assert all(state=='pending' and count>0 for _,state,count in rows)
