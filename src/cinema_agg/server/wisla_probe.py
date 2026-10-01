@@ -1,6 +1,7 @@
 """Fresh MSI session, hidden-state handshake only; never selects seats."""
 
 import re
+import time
 from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -12,6 +13,10 @@ from bs4 import BeautifulSoup
 from .seat_providers import transport_outcome
 
 ORIGIN = "https://wisla.novekino.pl"
+
+
+class CutoffExpired(Exception):
+    """Do not continue a final observation after the screening starts."""
 
 
 def event_identity(url: str) -> str:
@@ -30,14 +35,27 @@ def event_identity(url: str) -> str:
 
 
 def request(
-    client: httpx.Client, method: str, url: str, **kwargs: Any
+    client: httpx.Client,
+    method: str,
+    url: str,
+    finish_before_ms: int | None = None,
+    **kwargs: Any,
 ) -> httpx.Response:
     for _ in range(2):
         if not url.startswith(ORIGIN + "/MSI/"):
             raise ValueError("Unapproved redirect")
-        response = client.request(
-            method, url, follow_redirects=False, timeout=10, **kwargs
+        remaining = (
+            10.0
+            if finish_before_ms is None
+            else (finish_before_ms / 1000 - time.time())
         )
+        if remaining <= 0:
+            raise CutoffExpired
+        response = client.request(
+            method, url, follow_redirects=False, timeout=min(10, remaining), **kwargs
+        )
+        if finish_before_ms is not None and time.time() * 1000 >= finish_before_ms:
+            raise CutoffExpired
         if response.status_code not in {301, 302, 303}:
             response.raise_for_status()
             return response
@@ -74,7 +92,13 @@ def parse(response: httpx.Response) -> dict[str, Any]:
     )
 
 
-def probe(client: httpx.Client, event: str, start_ms: int) -> dict[str, Any]:
+def probe(
+    client: httpx.Client,
+    event: str,
+    start_ms: int,
+    *,
+    finish_before_ms: int | None = None,
+) -> dict[str, Any]:
     result: dict[str, Any] = dict(
         available=None, unavailable=None, capacity=None, http_status=None, cooldown_ms=0
     )
@@ -99,8 +123,14 @@ def probe(client: httpx.Client, event: str, start_ms: int) -> dict[str, Any]:
                 )
             )
         )
-        request(client, "GET", repertoire)
-        landing = request(client, "GET", entry, headers={"Referer": repertoire})
+        request(client, "GET", repertoire, finish_before_ms=finish_before_ms)
+        landing = request(
+            client,
+            "GET",
+            entry,
+            headers={"Referer": repertoire},
+            finish_before_ms=finish_before_ms,
+        )
         soup = BeautifulSoup(landing.text, "lxml")
         values = {
             str(n["name"]): str(n.get("value", ""))
@@ -118,9 +148,16 @@ def probe(client: httpx.Client, event: str, start_ms: int) -> dict[str, Any]:
             raise ValueError("Session handshake unavailable")
         values[field] = str(random["value"])
         response = request(
-            client, "POST", entry, data=values, headers={"Referer": str(landing.url)}
+            client,
+            "POST",
+            entry,
+            data=values,
+            headers={"Referer": str(landing.url)},
+            finish_before_ms=finish_before_ms,
         )
         result.update(http_status=response.status_code, **parse(response))
+    except CutoffExpired:
+        result["outcome"] = "deadline_exceeded"
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         result.update(

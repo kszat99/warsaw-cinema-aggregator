@@ -357,3 +357,29 @@ Per-request timeout is 10 seconds. Other MSI venues remain disabled.
 Schedule refresh includes Wisła today/tomorrow from the next regular run. Initial
 September 30 evening seed fetches only October 1 (September 30 bookings have ended);
 it preserves the already accepted Kinoteka and Arkadia snapshots.
+
+## Historical seat observations — October 1
+
+All three enabled providers now collect at T-24h, -12h, -6h, -3h, -2h, -1h,
+-30m, -15m and -5m. Kinoteka retains T/T+5/T+40, Arkadia T/T+5/T+10.
+Wisła adds T-2m and retires only unattempted pending T/T+5 jobs; existing attempts
+and Kura's failure incident are preserved. There is no fabricated recovery.
+
+Early snapshots (T-30m and earlier) have a deterministic 0–59.999s spread.
+Due time stores the actual spread target; actual attempt time remains separate.
+Near-start observations are exact. Existing sequential worker/provider cooldowns
+still apply. Upcoming slots are planned once; slots already passed when introduced
+are not backfilled and do not create missed jobs. Full curves require screenings
+to be discovered at least 24 hours ahead.
+
+Wisła T-2 requires >60s remaining before showtime at claim time. If not, state becomes
+cutoff_skipped; report displays the count and excludes it from coverage. Each MSI
+request/redirect checks the showtime cutoff and uses the remaining request timeout.
+A response arriving at/after showtime cannot retain counts; late responses are
+deadline_exceeded. A request already in flight can finish late, but no subsequent
+request is started after the cutoff. T-5 remains the fallback.
+
+These are observed available/unavailable counts, not confirmed purchases. Traffic
+increases with the number of screenings; review burst delays, rate limits and coverage
+before expanding. The retained post-start Kinoteka/Arkadia observations remain useful
+for final-count/cutoff validation.

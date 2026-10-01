@@ -3,10 +3,11 @@
 import ssl
 
 PROVIDERS = {"kinoteka": "kinoteka", "1074": "cinema_city", "wisla": "msi_wisla"}
+HISTORY_OFFSETS = (-1440, -720, -360, -180, -120, -60, -30, -15)
 OFFSETS = {
-    "kinoteka": (-5, 0, 5, 40),
-    "cinema_city": (-5, 0, 5, 10),
-    "msi_wisla": (-5, 0, 5),
+    "kinoteka": (*HISTORY_OFFSETS, -5, 0, 5, 40),
+    "cinema_city": (*HISTORY_OFFSETS, -5, 0, 5, 10),
+    "msi_wisla": (*HISTORY_OFFSETS, -5, -2),
 }
 NAMES = {
     "kinoteka": "Kinoteka",

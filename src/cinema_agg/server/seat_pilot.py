@@ -67,6 +67,14 @@ def plan(
     inserted = 0
     with engine.begin() as connection:
         require_schema(connection)
+        # Retire only unattempted obsolete timings; preserve attempts and history.
+        connection.execute(
+            text(
+                "UPDATE seat_jobs SET state='superseded' WHERE provider='msi_wisla' "
+                "AND purpose='scheduled' AND offset_minutes IN (0,5) "
+                "AND state='pending' AND retry_at_ms IS NULL"
+            )
+        )
         rows = (
             connection.execute(
                 text(
@@ -156,8 +164,22 @@ def plan(
                     identity += ":" + uuid4().hex
                 job_id = hashlib.sha256(identity.encode()).hexdigest()
                 due = now if diagnostic else row["starts_at_ms"] + offset * MINUTE
+                # Spread early snapshots reproducibly; keep near-start checks exact.
+                if not diagnostic and offset <= -30:
+                    due += int(job_id[:8], 16) % 60_000
                 if due < activation[provider]:
                     continue
+                if (
+                    not diagnostic
+                    and due < now
+                    and not connection.execute(
+                        text("SELECT 1 FROM seat_jobs WHERE id=:id"), {"id": job_id}
+                    ).scalar()
+                ):
+                    continue
+                deadline = due + 2 * MINUTE
+                if provider == "msi_wisla" and offset == -2 and not diagnostic:
+                    deadline = row["starts_at_ms"] - 1
                 result = connection.execute(
                     text(
                         "INSERT INTO seat_jobs (id, provider, cinema_id, "
@@ -184,7 +206,7 @@ def plan(
                         "offset": offset,
                         "purpose": purpose,
                         "due": due,
-                        "deadline": due + 2 * MINUTE,
+                        "deadline": deadline,
                         "state": "missed" if due + 2 * MINUTE < now else "pending",
                     },
                 )
@@ -205,6 +227,15 @@ def claim(
         connection.execute(
             text("UPDATE seat_worker_status SET heartbeat_ms=:now WHERE id=1"),
             {"now": now},
+        )
+        # Optional final Wisla check needs a minute for its fresh-session flow.
+        connection.execute(
+            text(
+                "UPDATE seat_jobs SET state='cutoff_skipped' WHERE state='pending' "
+                "AND provider='msi_wisla' AND purpose='scheduled' "
+                "AND offset_minutes=-2 AND starts_at_ms <= :limit"
+            ),
+            {"limit": now + MINUTE},
         )
         # Expired attempts remain visible, and may be retried only inside their window.
         connection.execute(
@@ -303,7 +334,13 @@ def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
     if job.get("provider") == "msi_wisla":
         if job.get("cinema_id") != "wisla" or job["provider_cinema"] != "wisla":
             raise ValueError("Invalid Wisla cinema")
-        return wisla_probe(client, str(job["cinema_event"]), job["starts_at_ms"])
+        final = job.get("purpose") == "scheduled" and job.get("offset_minutes") == -2
+        return wisla_probe(
+            client,
+            str(job["cinema_event"]),
+            job["starts_at_ms"],
+            finish_before_ms=job["starts_at_ms"] if final else None,
+        )
     if job.get("provider", "kinoteka") == "cinema_city":
         empty = {
             "available": None,
@@ -402,7 +439,12 @@ def finish(
             text("SELECT count(*) FROM seat_observations WHERE job_id=:id"),
             {"id": job["id"]},
         ).scalar_one()
-        if current["retry_at_ms"] is not None and now > current["deadline_ms"]:
+        if (current["retry_at_ms"] is not None and now > current["deadline_ms"]) or (
+            current["provider"] == "msi_wisla"
+            and current["purpose"] == "scheduled"
+            and current["offset_minutes"] == -2
+            and now >= current["starts_at_ms"]
+        ):
             # A slow response is retained as a late attempt, not on-time coverage.
             result.update(
                 outcome="deadline_exceeded",

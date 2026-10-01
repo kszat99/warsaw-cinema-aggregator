@@ -24,8 +24,8 @@ def test_wisla_planning_is_durable_and_provider_scoped(engine):
     plan(engine, NOW)
     plan(engine, NOW)
     with engine.connect() as db:
-        assert db.execute(text("SELECT count(*) FROM seat_jobs")).scalar_one() == 3
-        assert set(db.execute(text("SELECT offset_minutes FROM seat_jobs")).scalars()) == {-5, 0, 5}
+        assert db.execute(text("SELECT count(*) FROM seat_jobs")).scalar_one() == 2
+        assert set(db.execute(text("SELECT offset_minutes FROM seat_jobs")).scalars()) == {-5, -2}
         assert db.execute(text("SELECT provider FROM seat_jobs LIMIT 1")).scalar_one() == 'msi_wisla'
     job = claim(engine, NOW)
     assert job['cinema_event'] == '123'

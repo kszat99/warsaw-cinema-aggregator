@@ -6,6 +6,11 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1: historical observation scheduling deployed for the three enabled venues.
+T-24h/-12h/-6h/-3h/-2h/-1h/-30m/-15m/-5m, plus existing Kinoteka/Arkadia late checks.
+Wisła's final check is now T-2, with a hard showtime cutoff and T-5 fallback.
+No past historical slots are backfilled; review traffic and timing evidence today.
+
 Wisła pilot deployed: October 1 Kura at 10:00 verified 103 available / 17 unavailable /
 120 capacity through a saved production diagnostic. All 15 tomorrow screenings have
 45 pending T-5/T/T+5 checks; first at 09:55 Warsaw. Refresh includes Wisła from the next
@@ -614,6 +619,21 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+October 1 historical scheduling: at 10:50 only Kura had reached Wisła check times.
+Its 09:55 success (103/17/120) was followed by invalid_data at 10:00 and 10:05.
+Next screening Lalka 11:15 was not yet due; lack of another alert was expected.
+Added eight earlier historical offsets to all three providers; deterministic sub-minute
+spread for T-30 and earlier. Wisła routine T/T+5 pending jobs retired, replaced by T-2.
+Previously attempted failures retained; no closure/recovery invented. Worker skips
+T-2 when <=60 seconds remain, checks showtime at each HTTP step and discards late
+results. Skips explicitly counted separately from coverage. New elapsed slots are not
+created or counted missed. 178 tests passed, including restart/dedup/jitter, no-backfill,
+late-claim skip, late-result rejection and no request after cutoff. Lint/types/source
+secret checks passed. Deployed without schema migration. VPS confirms no pending
+Wisła T/T+5 jobs and all historical offsets queued; next review is actual load,
+coverage and Wisła T-2 success. Original Kura incident remains unresolved.
+
 
 September 30, Wisła pilot: fresh MSI session requires date-specific returnlink; a
 missing returnlink caused a generic error and was not treated as closed. Production

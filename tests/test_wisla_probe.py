@@ -88,3 +88,12 @@ def test_identity_rejects_other_hosts_and_duplicate_events():
     ):
         with pytest.raises(ValueError):
             event_identity(url)
+
+
+def test_final_probe_never_starts_after_cutoff(monkeypatch):
+    monkeypatch.setattr('cinema_agg.server.wisla_probe.time.time', lambda: START/1000)
+    client, calls = client_for()
+    with client:
+        result = probe(client, '114926', START, finish_before_ms=START)
+    assert result['outcome'] == 'deadline_exceeded'
+    assert not calls

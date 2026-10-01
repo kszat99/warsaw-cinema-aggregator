@@ -203,7 +203,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 notification["delivery"] = evidence.get("delivery", {})
     finally:
         engine.dispose()
-    excluded = {"superseded", "identity_conflict"}
+    excluded = {"superseded", "identity_conflict", "cutoff_skipped"}
     recovery_by_attempt = {
         attempt_id: incident["recovery"]
         for incident in seat_incidents
@@ -351,6 +351,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         "seats": {
             "due": len(eligible),
             "excluded": len(jobs) - len(eligible),
+            "cutoff_skipped": sum(j["state"] == "cutoff_skipped" for j in jobs),
             "windows_finished": len(settled),
             "successful_jobs": completed,
             "closed_jobs": sum(bool(j["closed"]) for j in settled),
@@ -766,6 +767,8 @@ def render(data: dict[str, Any]) -> str:
             f"  Missed: {seats['missed']} | overdue unfinished: "
             f"{seats['overdue_unfinished']} | future pending: "
             f"{seats['future_pending']}",
+            f"  Optional Wisła final checks skipped for insufficient time: "
+            f"{seats.get('cutoff_skipped', 0)} (excluded from coverage)",
             f"  Max attempt start delay: {age(seats['max_start_delay_seconds'])}s "
             "| allowance 120s",
             f"  Attempts: {json.dumps(seats['attempt_outcomes'], sort_keys=True)}",
