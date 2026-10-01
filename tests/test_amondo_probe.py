@@ -85,10 +85,10 @@ def test_background_plan_and_persistence(engine):
             :start,scraped_at_ms,duration_min,language,tags,
             'https://kicket.com/embeddables/repertoire?organizerId=1772&showId=33127',poster_url
             FROM screenings WHERE cinema_id='kinoteka'"""), {'start':NOW+5*MINUTE})
-    assert plan(engine,NOW,cinema_id='amondo') == 4
+    assert plan(engine,NOW,cinema_id='amondo') == 2
     plan(engine,NOW,cinema_id='amondo')
     with engine.connect() as db:
-        assert db.execute(text("SELECT count(*) FROM seat_jobs WHERE cinema_id='amondo'")).scalar_one() == 4
+        assert db.execute(text("SELECT count(*) FROM seat_jobs WHERE cinema_id='amondo'")).scalar_one() == 2
     job = claim(engine,NOW,dispatch_group='amondo')
     result,_ = run(responses())
     assert finish(engine,job,result,NOW+1000)

@@ -1,4 +1,38 @@
-# Kinoteka and Arkadia analytics pilots on the VPS
+# Cinema seat collection on the VPS
+
+## Current timing policy — October 1 evening
+
+Enabled: Kinoteka, seven Cinema City venues (Sadyba IMAX only), Novekino
+Wisła/Atlantic and Amondo. Older deployment entries below describe earlier scope.
+
+Historical checks for every provider: T-24h/-12h/-6h/-3h/-2h/-1h/-30m/-15m.
+
+| Provider | Final and later checks |
+| --- | --- |
+| Kinoteka | T-5, T0, T+5, T+40 |
+| Cinema City | T-5, T0, T+5, T+10 |
+| Wisła | T-5, T-2 |
+| Atlantic | T-5 |
+| Amondo | T-5, T-2 |
+
+Repeated successful pre-start observations followed by showtime unavailability
+justify retiring routine T0/T+5 for Novekino and Amondo. Amondo evidence establishes
+repertoire disappearance, not direct booking closure. Atlantic T-2 is not yet tested.
+Removed unattempted pending jobs become superseded and are excluded from coverage;
+completed attempts and genuine failures remain unchanged. Manual diagnostics remain
+available; occasional cutoff revalidation can be added separately.
+
+Post-start sales_unavailable (Wisła/Atlantic) or listing_absent/sales_unavailable
+(Amondo), backed by a successful T-5/T-2 scheduled observation of the exact same
+screening before start, are labelled EXPECTED CUTOFF. Existing notifications are
+marked resolved with resolution=expected_cutoff without a fabricated recovery message.
+Health retains evidence and the last pre-start seat count, but these observations do
+not trigger an open incident. Earlier technical failures in the same incident prevent
+this retirement. Pre-start unavailability, network/HTTP/validation failures and misses
+remain actionable. Historical unrelated problems may still produce ATTENTION.
+
+## Earlier deployment history
+
 
 Scope: Kinoteka and Cinema City Arkadia (catalogue ID 1074). Verified HTTPS and read-only
 occupancy/layout/status requests; never selects, reserves or purchases seats. Other

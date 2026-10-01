@@ -140,7 +140,11 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
         "seat_incident_open",
     }
     screening_incidents = {i["fingerprint"]: i for i in data.get("seat_incidents", [])}
-    current.update(k for k, i in screening_incidents.items() if not i["recovery"])
+    current.update(
+        k
+        for k, i in screening_incidents.items()
+        if not i["recovery"] and not i.get("expected_cutoff")
+    )
     engine = database_engine(path, readonly=False)
     try:
         with engine.begin() as conn:
@@ -174,6 +178,10 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
                     evidence = {}
                 if issue in screening_incidents:
                     incident = screening_incidents[issue]
+                    if incident.get("expected_cutoff"):
+                        # Policy retirement is not a successful seat recovery.
+                        state = "resolved"
+                        evidence["resolution"] = "expected_cutoff"
                     if old is None and incident["recovery"]:
                         state = "pending_resolved"
                     evidence["screening_incident"] = incident

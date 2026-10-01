@@ -91,6 +91,18 @@ def plan(
     inserted = 0
     with engine.begin() as connection:
         require_schema(connection)
+        # Retire removed scheduled windows without modifying attempted history.
+        for provider, offsets in PROVIDER_OFFSETS.items():
+            connection.execute(
+                text(
+                    "UPDATE seat_jobs SET state='superseded' "
+                    "WHERE provider=:provider AND purpose='scheduled' "
+                    "AND state='pending' AND offset_minutes NOT IN :offsets "
+                    "AND NOT EXISTS (SELECT 1 FROM seat_observations o "
+                    "WHERE o.job_id=seat_jobs.id)"
+                ).bindparams(bindparam("offsets", expanding=True)),
+                {"provider": provider, "offsets": offsets},
+            )
         rows = (
             connection.execute(
                 text(

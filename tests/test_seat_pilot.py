@@ -34,10 +34,10 @@ def test_wisla_planning_is_durable_and_provider_scoped(engine):
     plan(engine, NOW)
     plan(engine, NOW)
     with engine.connect() as db:
-        assert db.execute(text("SELECT count(*) FROM seat_jobs")).scalar_one() == 4
+        assert db.execute(text("SELECT count(*) FROM seat_jobs")).scalar_one() == 2
         assert set(
             db.execute(text("SELECT offset_minutes FROM seat_jobs")).scalars()
-        ) == {-5, -2, 0, 5}
+        ) == {-5, -2}
         assert (
             db.execute(text("SELECT provider FROM seat_jobs LIMIT 1")).scalar_one()
             == "msi_wisla"
@@ -221,7 +221,9 @@ def test_ambiguous_event_start_does_not_schedule(engine):
     assert status(engine)["jobs"] == {}
 
 
-def test_restore_only_future_unattempted_wisla_post_start_jobs(engine):
+def test_retire_future_unattempted_wisla_post_start_jobs(engine, monkeypatch):
+    from cinema_agg.server.seat_pilot import PROVIDER_OFFSETS
+    monkeypatch.setitem(PROVIDER_OFFSETS, "msi_wisla", (-5, -2, 0, 5))
     with engine.begin() as db:
         db.execute(
             text(
@@ -235,6 +237,7 @@ def test_restore_only_future_unattempted_wisla_post_start_jobs(engine):
                 "UPDATE seat_jobs SET state='superseded' WHERE offset_minutes IN (0,5)"
             )
         )
+    monkeypatch.setitem(PROVIDER_OFFSETS, "msi_wisla", (-5, -2))
     plan(engine, NOW + 6 * MINUTE)
     with engine.connect() as db:
         states = dict(
@@ -244,7 +247,7 @@ def test_restore_only_future_unattempted_wisla_post_start_jobs(engine):
                 )
             ).all()
         )
-    assert states == {0: "superseded", 5: "pending"}
+    assert states == {0: "superseded", 5: "superseded"}
     plan(engine, NOW + 6 * MINUTE)
     with engine.connect() as db:
         assert db.execute(text("SELECT count(*) FROM seat_jobs")).scalar_one() == 4
@@ -262,7 +265,7 @@ def test_atlantic_plans_independent_provider_and_start_checks(engine):
     with engine.connect() as db:
         assert set(
             db.execute(text("SELECT offset_minutes FROM seat_jobs")).scalars()
-        ) == {-5, 0, 5}
+        ) == {-5}
         assert (
             db.execute(text("SELECT DISTINCT provider FROM seat_jobs")).scalar_one()
             == "msi_atlantic"

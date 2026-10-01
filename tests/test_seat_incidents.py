@@ -5,6 +5,65 @@ from cinema_agg.server.pilot_health import report, job_lines
 from cinema_agg.server.seat_pilot import claim, finish, plan, MINUTE
 from cinema_agg.server.settings import Settings
 from test_seat_pilot import NOW, engine  # noqa: F401
+import pytest
+
+
+@pytest.mark.parametrize('cinema,provider,url,outcome', [
+    ('wisla','msi_wisla','https://wisla.novekino.pl/MSI/OrderTickets.aspx?event_id=123','sales_unavailable'),
+    ('atlantic','msi_atlantic','https://atlantic.novekino.pl/MSI/OrderTickets.aspx?event_id=123','sales_unavailable'),
+    ('amondo','amondo','https://kicket.com/embeddables/repertoire?organizerId=1772&showId=123','listing_absent'),
+])
+def test_expected_cutoff_retires_alert_without_fake_recovery(
+    engine, tmp_path, monkeypatch, cinema, provider, url, outcome
+):
+    from cinema_agg.server.seat_pilot import PROVIDER_OFFSETS
+    from cinema_agg.server.pilot_health import render
+    monkeypatch.setitem(PROVIDER_OFFSETS, provider, (-5,0,5))
+    with engine.begin() as db:
+        db.execute(text('UPDATE screenings SET cinema_id=:cinema,booking_url=:url'),
+                   {'cinema':cinema,'url':url})
+    plan(engine,NOW)
+    observation(engine,NOW,'success')
+    observation(engine,NOW+5*MINUTE,outcome)
+    path=tmp_path/'seats.sqlite3'
+    data=report(path,NOW+6*MINUTE)
+    incident=data['seat_incidents'][0]
+    assert incident['expected_cutoff'] is True
+    assert incident['recovery'] is None
+    assert 'seat_incident_open' not in data['issues']
+    assert 'EXPECTED CUTOFF (alert resolved)' in render(data)
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO alert_state (fingerprint,state,first_seen_ms,last_seen_ms,last_notified_ms,evidence) VALUES (:fp,'open',:now,:now,:now,'{}')"),
+                   {'fp':incident['fingerprint'],'now':NOW})
+    original=alerts.report
+    monkeypatch.setattr(alerts,'report',lambda *a,**k:{**original(*a,**k),'issues':[]})
+    messages=[]
+    monkeypatch.setattr(alerts,'send_telegram',lambda message,settings:(messages.append(message) or True,None))
+    alerts.evaluate_alerts(path,NOW+6*MINUTE,Settings())
+    assert messages == []
+    with engine.connect() as db:
+        state,evidence=db.execute(text('SELECT state,evidence FROM alert_state WHERE fingerprint=:fp'),{'fp':incident['fingerprint']}).one()
+    assert state=='resolved' and 'expected_cutoff' in evidence
+
+
+def test_prestart_unavailability_is_not_expected_cutoff(engine,tmp_path):
+    plan(engine,NOW)
+    observation(engine,NOW,'sales_unavailable')
+    incident=report(tmp_path/'seats.sqlite3',NOW+MINUTE)['seat_incidents'][0]
+    assert incident['expected_cutoff'] is False
+
+
+def test_poststart_cutoff_without_prestart_counts_remains_open(engine,tmp_path,monkeypatch):
+    from cinema_agg.server.seat_pilot import PROVIDER_OFFSETS
+    monkeypatch.setitem(PROVIDER_OFFSETS,'msi_wisla',(-5,0,5))
+    with engine.begin() as db:
+        db.execute(text("UPDATE screenings SET cinema_id='wisla',booking_url='https://wisla.novekino.pl/MSI/OrderTickets.aspx?event_id=123'"))
+    plan(engine,NOW)
+    observation(engine,NOW,'invalid_data')
+    observation(engine,NOW+5*MINUTE,'sales_unavailable')
+    data=report(tmp_path/'seats.sqlite3',NOW+6*MINUTE)
+    assert data['seat_incidents'][0]['expected_cutoff'] is False
+    assert 'seat_incident_open' in data['issues']
 
 
 def observation(engine, when, outcome):

@@ -211,6 +211,12 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         for attempt_id in incident["failed_attempt_ids"]
     }
     for attempt_row in attempts:
+        for incident in seat_incidents:
+            if (
+                incident.get("expected_cutoff")
+                and attempt_row["attempt_id"] in incident["failed_attempt_ids"]
+            ):
+                attempt_row["expected_cutoff"] = True
         if attempt_row["attempt_id"] in recovery_by_attempt:
             attempt_row["later_recovery"] = recovery_by_attempt[
                 attempt_row["attempt_id"]
@@ -257,7 +263,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         or now - heartbeat["attempted_ms"] > 25 * MINUTE
     ):
         issues.append("external_heartbeat_failed_or_stale")
-    if any(not i["recovery"] for i in seat_incidents):
+    if any(not i["recovery"] and not i.get("expected_cutoff") for i in seat_incidents):
         issues.append("seat_incident_open")
     if notifications:
         issues.append("notification_delivery_pending")
@@ -477,7 +483,12 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             lines.append(
                 "    Retry not scheduled: insufficient time or attempt not eligible."
             )
-        if "later_recovery" in job:
+        if job.get("expected_cutoff"):
+            lines.append(
+                "    EXPECTED CUTOFF: retired from alerts; prior pre-start counts "
+                "were obtained. No later seat recovery is claimed."
+            )
+        elif "later_recovery" in job:
             recovery = job["later_recovery"]
             if recovery:
                 kind = (
@@ -717,9 +728,27 @@ def render(data: dict[str, Any]) -> str:
         )
     else:
         lines.append("  External heartbeat: no local attempts recorded")
-    active_incidents = [i for i in data.get("seat_incidents", []) if not i["recovery"]]
+    active_incidents = [
+        i
+        for i in data.get("seat_incidents", [])
+        if not i["recovery"] and not i.get("expected_cutoff")
+    ]
     lines.append(f"  Active screening incidents: {len(active_incidents)}")
     for incident in data.get("seat_incidents", []):
+        if incident.get("expected_cutoff"):
+            prior = incident["last_prestart_success"]
+            lines.append(
+                f"  EXPECTED CUTOFF (alert resolved): "
+                f"{cinema_name(incident['cinema_id'])} | "
+                f"{safe_label(incident['title'])} | "
+                f"screening {local_time(incident['starts_at_ms'])}"
+            )
+            lines.append(
+                f"    Last pre-start count: {local_time(prior['attempted_at_ms'])} | "
+                f"{prior['available']} available / {prior['capacity']} capacity. "
+                "Historical observations retained; no recovery claimed."
+            )
+            continue
         recovery = incident["recovery"]
         if recovery and recovery["attempted_at_ms"] < (
             datetime.fromisoformat(data["generated_at"]).timestamp() * 1000

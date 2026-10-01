@@ -6,6 +6,19 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1 cutoff policy update: routine T0/T+5 removed for Wisła, Atlantic and
+Amondo. Historical checks unchanged. Final offsets: Wisła/Amondo T-5 and T-2;
+Atlantic T-5 (T-2 not yet validated); Cinema City and Kinoteka unchanged.
+Unattempted pending removed windows become superseded; attempted history retained.
+Expected post-start availability notices are retired only for the established
+provider/outcome combination with successful T-5/T-2 observations of the SAME
+screening before showtime. No network, HTTP, validation or pre-start failure is
+silenced. Resolution is labelled expected_cutoff, never a fictitious seat recovery.
+Health retains these observations and last pre-start counts without open warnings.
+Historical technical failures and missed jobs can still produce ATTENTION.
+Deployment verification pending.
+
+
 October 1 18:53 incident review: Novekino showtime unavailability repeats;
 Amondo Do utraty tchu returned 20/0/20 at T-2, then listing_absent at T0/T+5.
 This establishes disappearance from repertoire, not direct sales closure.

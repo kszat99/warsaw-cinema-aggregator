@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import Connection, text
 
-from .seat_providers import cinema_name
+from .seat_providers import EXPECTED_CUTOFF_OUTCOMES, cinema_name
 
 
 def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
@@ -25,6 +25,7 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
     ).mappings()
     result: list[dict[str, Any]] = []
     active: dict[tuple[str, str, str, int], dict[str, Any]] = {}
+    last_success: dict[tuple[str, str, str, int], dict[str, Any]] = {}
     for row in rows:
         key = (
             row["provider"],
@@ -33,12 +34,24 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
             row["starts_at_ms"],
         )
         if row["outcome"] == "success":
+            last_success[key] = dict(row)
             incident = active.pop(key, None)
             if incident is not None:
                 incident["recovery"] = dict(row)
             continue
         if row["outcome"] == "closed":
             continue  # Explicit sales closure is not a transport failure or recovery.
+        prior = last_success.get(key)
+        expected = (
+            row["outcome"] in EXPECTED_CUTOFF_OUTCOMES.get(row["provider"], set())
+            and row["offset_minutes"] >= 0
+            and row["attempted_at_ms"] >= row["starts_at_ms"]
+            and prior is not None
+            and prior["offset_minutes"] in {-5, -2}
+            and prior["attempted_at_ms"] < row["starts_at_ms"]
+            and prior["finished_at_ms"] is not None
+            and prior["finished_at_ms"] < row["starts_at_ms"]
+        )
         if key not in active:
             incident = {
                 "fingerprint": "seat:" + row["id"],
@@ -53,9 +66,12 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
                 "failed_attempt_ids": [],
                 "failed_job_ids": [],
                 "recovery": None,
+                "expected_cutoff": expected,
+                "last_prestart_success": prior,
             }
             active[key] = incident
             result.append(incident)
+        active[key]["expected_cutoff"] = active[key]["expected_cutoff"] and expected
         active[key]["failures"] += 1
         active[key]["failed_attempt_ids"].append(row["id"])
         active[key]["failed_job_ids"].append(row["job_id"])
