@@ -640,7 +640,12 @@ do not infer guaranteed coverage from smoke tests. VPS deployed and scheduler co
 Bemowo 967, Promenada 1155, Janki 926, Mokotów 1269, Arkadia 1412 and Północna 1004
 at activation (today/tomorrow, early elapsed slots skipped). Kinoteka/Wisła retained.
 188 tests passed, strict lint/types and secret checks passed; worker, refresh and
-alert timers active. Scheduled observations after rollout remain to be reviewed.
+alert timers active. First deployed historical checks for Mokotów/Promenada succeeded; no overdue jobs
+at 11:11 Warsaw. Release b2934ac passed all Linux/Windows/security CI:
+https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36841056842.
+Separate Wisła finding: Lalka T-5 at 11:10:13 returned invalid_data, while Mistyczka
+T-1h succeeded at 11:10:26. A blanket assumption of showtime closure is insufficient;
+investigate the precise missing-map/parser cause before changing more timings.
 
 
 October 1 historical scheduling: at 10:50 only Kura had reached Wisła check times.
