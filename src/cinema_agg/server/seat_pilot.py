@@ -8,6 +8,7 @@ import signal
 import sqlite3
 import threading
 from collections.abc import Mapping
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,8 @@ from .cinema_city_probe import probe as city_probe
 from .database import database_engine, require_schema
 from .seat_providers import (
     CITY_CINEMAS,
+    DISPATCH_GROUPS,
+    PROVIDER_SPACING_MS,
     PROVIDERS,
     RETRY_BUDGET_MS,
     RETRY_DELAY_MS,
@@ -246,7 +249,13 @@ def claim(
     now: int,
     *,
     diagnostic_only: bool = False,
+    dispatch_group: str | None = None,
 ) -> Mapping[str, Any] | None:
+    allowed = (
+        DISPATCH_GROUPS[dispatch_group]
+        if dispatch_group
+        else tuple(set(PROVIDERS.values()))
+    )
     with engine.begin() as connection:
         require_schema(connection)
         connection.execute(
@@ -312,11 +321,25 @@ def claim(
         blocked = connection.execute(
             text("SELECT cooldown_until_ms FROM seat_worker_status WHERE id=1")
         ).scalar_one()
+        if (dispatch_group is None and blocked > now) or connection.execute(
+            text(
+                "SELECT count(*) FROM seat_jobs WHERE state='running' "
+                "AND provider IN :allowed"
+            ).bindparams(bindparam("allowed", expanding=True)),
+            {"allowed": allowed},
+        ).scalar_one():
+            return None
         if (
-            blocked > now
-            or connection.execute(
-                text("SELECT count(*) FROM seat_jobs WHERE state='running'")
+            dispatch_group
+            and connection.execute(
+                text(
+                    "SELECT coalesce(max(cooldown_until_ms),0) "
+                    "FROM seat_provider_status "
+                    "WHERE provider IN :allowed"
+                ).bindparams(bindparam("allowed", expanding=True)),
+                {"allowed": allowed},
             ).scalar_one()
+            > now
         ):
             return None
         row = (
@@ -324,13 +347,16 @@ def claim(
                 text(
                     "SELECT * FROM seat_jobs WHERE state='pending' AND due_at_ms <= "
                     ":now "
+                    "AND provider IN :allowed "
                     "AND (retry_at_ms IS NULL OR retry_at_ms<=:now) "
                     "AND (:diagnostic=0 OR purpose='diagnostic') "
                     "AND provider IN (SELECT provider FROM seat_provider_status "
                     "WHERE cooldown_until_ms<=:now) "
-                    "ORDER BY deadline_ms, id LIMIT 1"
-                ),
-                {"now": now, "diagnostic": int(diagnostic_only)},
+                    "ORDER BY CASE WHEN purpose='scheduled' "
+                    "AND offset_minutes IN (-5,-2) "
+                    "THEN 0 ELSE 1 END, deadline_ms, id LIMIT 1"
+                ).bindparams(bindparam("allowed", expanding=True)),
+                {"now": now, "diagnostic": int(diagnostic_only), "allowed": allowed},
             )
             .mappings()
             .first()
@@ -353,7 +379,7 @@ def claim(
             ),
             {"token": token, "id": row["id"], "now": now},
         )
-        return {**dict(row), "claim_token": token}
+        return {**dict(row), "claim_token": token, "dispatch_group": dispatch_group}
 
 
 def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
@@ -535,9 +561,18 @@ def finish(
             text(
                 "UPDATE seat_provider_status SET "
                 "cooldown_until_ms=max(cooldown_until_ms,:until) "
-                "WHERE provider=:provider"
-            ),
-            {"until": now + result["cooldown_ms"], "provider": job["provider"]},
+                "WHERE provider IN :providers"
+            ).bindparams(bindparam("providers", expanding=True)),
+            {
+                "until": now
+                + max(
+                    result["cooldown_ms"],
+                    PROVIDER_SPACING_MS if job.get("dispatch_group") else 0,
+                ),
+                "providers": DISPATCH_GROUPS[str(job["dispatch_group"])]
+                if job.get("dispatch_group")
+                else (job["provider"],),
+            },
         )
         return True
 
@@ -660,43 +695,58 @@ def main() -> None:
         last_plan = clock_ms()
         last_snapshot = latest_snapshot_id(engine)
         last_full_plan = last_plan
-        with httpx.Client(timeout=20, follow_redirects=False) as client:
+
+        def execute_job(job: Mapping[str, Any]) -> dict[str, Any]:
+            with httpx.Client(timeout=20, follow_redirects=False) as client:
+                result = probe(client, job)
+            saved = finish(engine, job, result, clock_ms())
+            print(
+                json.dumps(
+                    {
+                        "event": "seat_observation",
+                        "job_id": job["id"],
+                        "provider": job["provider"],
+                        "cinema_id": job["cinema_id"],
+                        "dispatch_group": job.get("dispatch_group"),
+                        "saved": saved,
+                        **result,
+                    }
+                ),
+                flush=True,
+            )
+            return result
+
+        if diagnostic:
+            job = claim(engine, clock_ms(), diagnostic_only=True)
+            if job is None:
+                print("No claimable job: check schedules, freshness or cooldown.")
+                raise SystemExit(1)
+            if execute_job(job)["outcome"] != "success":
+                raise SystemExit(1)
+            return
+        # One task per group; each owns its HTTP client. SQLite claim enforces the
+        # group lease too, so a second process cannot duplicate active requests.
+        with ThreadPoolExecutor(max_workers=len(DISPATCH_GROUPS)) as pool:
+            active: dict[str, Future[dict[str, Any]]] = {}
             while not stop.is_set():
+                for group in list(active):
+                    if active[group].done():
+                        active.pop(group).result()
                 now = clock_ms()
-                if not diagnostic and now - last_plan >= MINUTE:
+                if now - last_plan >= MINUTE:
                     snapshot = latest_snapshot_id(engine)
                     if snapshot != last_snapshot or now - last_full_plan >= 10 * MINUTE:
                         plan(engine, now)
                         last_snapshot = snapshot
                         last_full_plan = now
                     last_plan = now
-                job = claim(engine, now, diagnostic_only=diagnostic)
-                if job:
-                    result = probe(client, job)
-                    saved = finish(engine, job, result, clock_ms())
-                    print(
-                        json.dumps(
-                            {
-                                "event": "seat_observation",
-                                "job_id": job["id"],
-                                "provider": job["provider"],
-                                "cinema_id": job["cinema_id"],
-                                "saved": saved,
-                                **result,
-                            }
-                        ),
-                        flush=True,
-                    )
-                if diagnostic:
-                    if job is None:
-                        print(
-                            "No claimable job: check schedules, freshness or cooldown."
-                        )
-                        raise SystemExit(1)
-                    if result["outcome"] != "success":
-                        raise SystemExit(1)
-                    return
-                stop.wait(5)
+                for group in DISPATCH_GROUPS:
+                    if group not in active:
+                        job = claim(engine, clock_ms(), dispatch_group=group)
+                        if job:
+                            active[group] = pool.submit(execute_job, job)
+                stop.wait(1)
+
     finally:
         engine.dispose()
 

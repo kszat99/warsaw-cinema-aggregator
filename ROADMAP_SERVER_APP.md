@@ -1026,3 +1026,24 @@ means completion is expected around fifteen minutes later, not yet verified here
 Local suite 206 passed, strict lint/mypy/source scan passed. Confirm full publication
 and recovery notification after this run completes; do not call it recovered merely
 because a new run has started.
+
+
+## October 1: concurrent provider dispatch with conservative shared pacing
+
+Single managed seat-worker process now dispatches up to three independent tasks:
+Cinema City (all seven locations), Kinoteka, and Novekino (Wisła + Atlantic). Each
+flow owns an HTTP client. One active lease per dispatch group is enforced inside
+SQLite claim transactions, as well as by the executor's active-group tracking.
+Shared Novekino group serializes both sites and propagates pacing/block cooldown
+across them; Cinema City block still pauses all its locations, not other groups.
+Minimum five seconds after completion before next same-group flow; bounds/timeouts
+and retries unchanged. Global five-second sleep replaced by provider gating and
+one-second dispatch polling. Pending checks have the original actual-time evidence
+and existing near-start/historical deadlines; no retroactive backfill or fake recovery.
+Final pre-start T-5/T-2 checks precede supplementary post-start and historical work,
+with earliest deadline ordering within priority class. Single provider can still
+exceed its two-minute burst capacity; measure new coverage before changing windows
+or request concurrency. No claim of eliminating all future misses.
+Regular planner remains one owner with unchanged-snapshot skip and ten-minute horizon
+refresh. Threads perform network work outside short SQLite claim/finish transactions.
+Health and alerts continue tracking missed slots, actual attempts and provider cooldowns.

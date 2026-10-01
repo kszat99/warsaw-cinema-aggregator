@@ -55,3 +55,11 @@ def transport_outcome(error: BaseException) -> str:
             return "tls_error"
         current = current.__cause__ or current.__context__
     return "network_error"
+
+
+DISPATCH_GROUPS = {
+    "cinema_city": ("cinema_city",),
+    "kinoteka": ("kinoteka",),
+    "novekino": ("msi_wisla", "msi_atlantic"),
+}
+PROVIDER_SPACING_MS = 5000
