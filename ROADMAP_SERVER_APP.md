@@ -1016,3 +1016,13 @@ phase on interrupted runs. Alerts distinguish recorded scopes from planned total
 state whether a snapshot was published, and show database_busy when captured.
 Historical runs retain unknown totals/causes; no guessed historical fields added.
 A persistent blocker still fails visibly; this does not promise zero future errors.
+
+
+Deployment d1044f6 verified with pre-migration integrity-checked backup
+backup-pre-contention-20261001.sqlite3. Schema 0009_refresh_failure active; worker
+and timers restarted, no overdue jobs. Replacement full refresh ed343e7fddc446f587960b57f49806ee
+started with planned_scopes=20 and first scope accepted; normal 45-second pacing
+means completion is expected around fifteen minutes later, not yet verified here.
+Local suite 206 passed, strict lint/mypy/source scan passed. Confirm full publication
+and recovery notification after this run completes; do not call it recovered merely
+because a new run has started.
