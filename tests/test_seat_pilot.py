@@ -248,3 +248,22 @@ def test_restore_only_future_unattempted_wisla_post_start_jobs(engine):
     plan(engine, NOW + 6 * MINUTE)
     with engine.connect() as db:
         assert db.execute(text("SELECT count(*) FROM seat_jobs")).scalar_one() == 4
+
+
+def test_atlantic_plans_independent_provider_and_start_checks(engine):
+    with engine.begin() as db:
+        db.execute(
+            text(
+                "UPDATE screenings SET cinema_id='atlantic', booking_url='https://atlantic.novekino.pl/MSI/OrderTickets.aspx?event_id=123'"
+            )
+        )
+    plan(engine, NOW)
+    plan(engine, NOW)
+    with engine.connect() as db:
+        assert set(
+            db.execute(text("SELECT offset_minutes FROM seat_jobs")).scalars()
+        ) == {-5, 0, 5}
+        assert (
+            db.execute(text("SELECT DISTINCT provider FROM seat_jobs")).scalar_one()
+            == "msi_atlantic"
+        )

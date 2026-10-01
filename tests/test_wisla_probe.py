@@ -137,3 +137,76 @@ def test_failure_evidence_strips_scripts_inputs_and_caps_text():
     assert "secret" not in evidence
     assert len(evidence) == 24000
     assert result["diagnostics"]["response_text_truncated"]
+
+
+def test_atlantic_redirect_referer_and_capacity():
+    from cinema_agg.server.wisla_probe import ATLANTIC_ORIGIN
+
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        assert request.url.host == "atlantic.novekino.pl"
+        if request.url.path == "/MSI/mvc/pl":
+            return httpx.Response(
+                200,
+                text='<a href="/MSI/Default.aspx?event_id=123&amp;typetran=0">Buy</a>',
+            )
+        if request.method == "POST":
+            data = parse_qs(request.content.decode())
+            assert data["ctl$hdnServer"] == ["framework-server"]
+            assert "seatCheckboxBad" not in data
+            return httpx.Response(
+                302, headers={"Location": "/MSI/OrderTickets.aspx?event_id=123"}
+            )
+        if request.url.path == "/MSI/Default.aspx":
+            return httpx.Response(
+                200,
+                text=LANDING.replace(
+                    "</form>",
+                    '<input type="hidden" name="ctl$hdnServer" value="framework-server"></form>',
+                ),
+            )
+        assert request.headers["Referer"].startswith(
+            ATLANTIC_ORIGIN + "/MSI/Default.aspx"
+        )
+        return httpx.Response(
+            200, text='Sala A <input id="SeatCount" value="158">' + MAP
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = probe(client, "123", START, origin=ATLANTIC_ORIGIN)
+    assert result["outcome"] == "success"
+    assert (result["available"], result["capacity"]) == (
+        2,
+        120,
+    )  # explicit labels take precedence
+    assert len(calls) == 4
+
+
+def test_atlantic_uses_corroborated_hall_capacity_without_labels():
+    from cinema_agg.server.wisla_probe import parse, ATLANTIC_ORIGIN
+
+    page = 'Sala A <input id="SeatCount" value="158"><input type="checkbox" id="seatCheckbox1">'
+    response = httpx.Response(
+        200,
+        text=page,
+        request=httpx.Request("GET", ATLANTIC_ORIGIN + "/MSI/OrderTickets.aspx"),
+    )
+    assert parse(response)["capacity"] == 158
+    assert parse(response)["available"] == 1
+    with pytest.raises(ValueError):
+        parse(
+            httpx.Response(
+                200, text=page.replace("158", "159"), request=response.request
+            )
+        )
+
+
+def test_atlantic_identity_is_separate_from_wisla():
+    from cinema_agg.server.wisla_probe import ATLANTIC_ORIGIN
+
+    url = ATLANTIC_ORIGIN + "/MSI/OrderTickets.aspx?event_id=123"
+    assert event_identity(url, ATLANTIC_ORIGIN) == "123"
+    with pytest.raises(ValueError):
+        event_identity(url)

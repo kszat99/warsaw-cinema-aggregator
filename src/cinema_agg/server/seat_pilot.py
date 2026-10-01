@@ -29,7 +29,7 @@ from .seat_providers import (
 )
 from .seat_providers import OFFSETS as PROVIDER_OFFSETS
 from .settings import Settings
-from .wisla_probe import event_identity
+from .wisla_probe import ATLANTIC_ORIGIN, ORIGIN, event_identity
 from .wisla_probe import probe as wisla_probe
 
 MINUTE = 60000
@@ -52,8 +52,10 @@ def booking_identity(url: str) -> tuple[str, str]:
 
 
 def job_identity(cinema_id: str, url: str) -> tuple[str, str]:
-    if cinema_id == "wisla":
-        return "wisla", event_identity(url)
+    if cinema_id in {"wisla", "atlantic"}:
+        return cinema_id, event_identity(
+            url, ATLANTIC_ORIGIN if cinema_id == "atlantic" else ORIGIN
+        )
     if cinema_id in CITY_CINEMAS:
         return cinema_id, presentation_id(url)
     if cinema_id == "kinoteka":
@@ -269,7 +271,8 @@ def claim(
                 "UPDATE seat_jobs SET state='done' WHERE state='pending' "
                 "AND retry_at_ms IS NOT NULL AND deadline_ms < :now + "
                 "CASE provider WHEN 'cinema_city' THEN :city "
-                "WHEN 'msi_wisla' THEN :wisla ELSE :kinoteka END"
+                "WHEN 'msi_wisla' THEN :wisla "
+                "WHEN 'msi_atlantic' THEN :wisla ELSE :kinoteka END"
             ),
             {
                 "now": now,
@@ -340,8 +343,9 @@ def claim(
 
 
 def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
-    if job.get("provider") == "msi_wisla":
-        if job.get("cinema_id") != "wisla" or job["provider_cinema"] != "wisla":
+    if job.get("provider") in {"msi_wisla", "msi_atlantic"}:
+        venue = "wisla" if job["provider"] == "msi_wisla" else "atlantic"
+        if job.get("cinema_id") != venue or job["provider_cinema"] != venue:
             raise ValueError("Invalid Wisla cinema")
         final = job.get("purpose") == "scheduled" and job.get("offset_minutes") == -2
         return wisla_probe(
@@ -349,6 +353,7 @@ def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
             str(job["cinema_event"]),
             job["starts_at_ms"],
             finish_before_ms=job["starts_at_ms"] if final else None,
+            origin=ATLANTIC_ORIGIN if venue == "atlantic" else ORIGIN,
         )
     if job.get("provider", "kinoteka") == "cinema_city":
         empty = {

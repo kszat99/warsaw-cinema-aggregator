@@ -464,3 +464,21 @@ attempted/finished history are not rewritten. Strict pre-showtime deadline appli
 only to T-2, not the restored checks. Existing serial pacing, request limits and
 failure/recovery alerts apply, with sanitized failure text retained. Late purchasing
 is a hypothesis to evaluate from observations, not an established fact.
+
+
+## October 1: Novekino Atlantic collection
+
+Atlantic enabled explicitly as msi_atlantic, separate cooldown from msi_wisla.
+History timings T-24h/-12h/-6h/-3h/-2h/-1h/-30m/-15m plus T-5/T0/T+5.
+Fresh verified HTTPS MSI session, approved repertoire booking link, ASP.NET tab
+handshake only. Atlantic requires preserving same-origin Referer on seat redirect;
+framework hdnServer is included, no seat/payment controls are posted. Wisła retains
+its existing redirect/session behaviour. Missing labels on Atlantic are handled
+using unique selectable controls plus explicit hidden SeatCount corroborated against
+known hall A/B/C/D capacities (158/221/259/156); unknown/mismatched halls fail.
+Counts mean availability, not purchased tickets. Failure evidence and explanatory
+Telegram alerts use the same durable observation/incident system. Closure timing
+is still under observation; unavailable/redirected pages do not imply zero seats.
+VPS live readiness: October 2 Lalka 11:45, event 47593, 128 available /30 unavailable
+/158 capacity. Regular refresh automatically includes Atlantic today/tomorrow.
+Ten venues /20 date scopes at 45s spacing fit the existing 30-minute service timeout.

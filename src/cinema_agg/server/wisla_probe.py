@@ -13,19 +13,22 @@ from bs4 import BeautifulSoup
 from .seat_providers import transport_outcome
 
 ORIGIN = "https://wisla.novekino.pl"
+ATLANTIC_ORIGIN = "https://atlantic.novekino.pl"
+ORIGINS = {ORIGIN, ATLANTIC_ORIGIN}
 
 
 class CutoffExpired(Exception):
     """Do not continue a final observation after the screening starts."""
 
 
-def event_identity(url: str) -> str:
+def event_identity(url: str, origin: str = ORIGIN) -> str:
     parts = urlsplit(url)
     query = parse_qs(parts.query)
     ids = query.get("event_id", [])
     if (
-        parts.scheme != "https"
-        or parts.netloc != "wisla.novekino.pl"
+        origin not in ORIGINS
+        or parts.scheme != "https"
+        or parts.netloc != urlsplit(origin).netloc
         or parts.path not in {"/MSI/OrderTickets.aspx", "/MSI/Default.aspx"}
         or len(ids) != 1
         or not re.fullmatch(r"[0-9]{1,12}", ids[0])
@@ -39,10 +42,11 @@ def request(
     method: str,
     url: str,
     finish_before_ms: int | None = None,
+    origin: str = ORIGIN,
     **kwargs: Any,
 ) -> httpx.Response:
     for _ in range(2):
-        if not url.startswith(ORIGIN + "/MSI/"):
+        if origin not in ORIGINS or not url.startswith(origin + "/MSI/"):
             raise ValueError("Unapproved redirect")
         remaining = (
             10.0
@@ -60,7 +64,14 @@ def request(
             response.raise_for_status()
             return response
         url = str(response.url.join(response.headers["location"]))
-        method, kwargs = "GET", {}
+        method, kwargs = (
+            "GET",
+            (
+                {"headers": {"Referer": str(response.url)}}
+                if origin == ATLANTIC_ORIGIN
+                else {}
+            ),
+        )
     raise ValueError("Redirect limit")
 
 
@@ -72,7 +83,37 @@ def parse(response: httpx.Response) -> dict[str, Any]:
     total = re.search(r"Miejsc\s+łącznie\s*:\s*(\d+)", text, re.I)
     free = re.search(r"Dostępnych\s+miejsc\s*:\s*(\d+)", text, re.I)
     if not total or not free:
-        raise ValueError("Missing capacity markers")
+        if response.url.host != "atlantic.novekino.pl":
+            raise ValueError("Missing capacity markers")
+        hall_match = re.search(r"\bSala\s+([A-D])\b", text, re.I)
+        count = soup.select_one("#SeatCount")
+        known = {"A": 158, "B": 221, "C": 259, "D": 156}
+        if (
+            hall_match is None
+            or count is None
+            or str(count.get("value")) != str(known[hall_match[1].upper()])
+        ):
+            raise ValueError("Missing or inconsistent Atlantic hall capacity")
+        capacity = known[hall_match[1].upper()]
+        seats = soup.select('input[type="checkbox"][id*="seatCheckbox"]')
+        ids = [seat.get("id") for seat in seats]
+        if (
+            len(ids) != len(set(ids))
+            or len(seats) > capacity
+            or any(seat.has_attr("disabled") for seat in seats)
+        ):
+            raise ValueError("Seat counts disagree")
+        return dict(
+            outcome="success",
+            available=len(seats),
+            unavailable=capacity - len(seats),
+            capacity=capacity,
+            diagnostics={
+                "count_source": "selectable_controls",
+                "hall": hall_match[1].upper(),
+                "corroborated_capacity": capacity,
+            },
+        )
     capacity, available = int(total[1]), int(free[1])
     seats = soup.select('input[type="checkbox"][id*="seatCheckbox"]')
     ids = [seat.get("id") for seat in seats]
@@ -117,6 +158,7 @@ def probe(
     start_ms: int,
     *,
     finish_before_ms: int | None = None,
+    origin: str = ORIGIN,
 ) -> dict[str, Any]:
     result: dict[str, Any] = dict(
         available=None, unavailable=None, capacity=None, http_status=None, cooldown_ms=0
@@ -125,16 +167,16 @@ def probe(
     phase = "identity"
     last_response = None
     try:
-        if not re.fullmatch(r"[0-9]{1,12}", event):
+        if origin not in ORIGINS or not re.fullmatch(r"[0-9]{1,12}", event):
             raise ValueError("Invalid event")
         day = datetime.fromtimestamp(start_ms / 1000, ZoneInfo("Europe/Warsaw")).date()
         repertoire = (
-            ORIGIN
+            origin
             + "/MSI/mvc/pl?"
             + urlencode(dict(sort="Date", date=day.isoformat(), datestart="0"))
         )
         entry = (
-            ORIGIN
+            origin
             + "/MSI/Default.aspx?"
             + urlencode(
                 dict(
@@ -146,8 +188,24 @@ def probe(
         )
         phase = "repertoire"
         last_response = request(
-            client, "GET", repertoire, finish_before_ms=finish_before_ms
+            client, "GET", repertoire, finish_before_ms=finish_before_ms, origin=origin
         )
+        if origin == ATLANTIC_ORIGIN:
+            catalogue = BeautifulSoup(last_response.text, "lxml")
+            candidates = []
+            for link in catalogue.select("a[href]"):
+                candidate = str(last_response.url.join(str(link["href"])))
+                try:
+                    identity = event_identity(candidate, origin)
+                except ValueError:
+                    continue
+                if identity == event and parse_qs(urlsplit(candidate).query).get(
+                    "typetran"
+                ) == ["0"]:
+                    candidates.append(candidate)
+            if not candidates:
+                raise ValueError("Booking link absent from Atlantic repertoire")
+            entry = candidates[0]
         phase = "handshake"
         landing = request(
             client,
@@ -155,6 +213,7 @@ def probe(
             entry,
             headers={"Referer": repertoire},
             finish_before_ms=finish_before_ms,
+            origin=origin,
         )
         last_response = landing
         soup = BeautifulSoup(landing.text, "lxml")
@@ -166,7 +225,9 @@ def probe(
         values = {
             k: v
             for k, v in values.items()
-            if k.startswith("__") or k.endswith("hfldUniqueTabGuid")
+            if k.startswith("__")
+            or k.endswith("hfldUniqueTabGuid")
+            or (origin == ATLANTIC_ORIGIN and k.endswith("hdnServer"))
         }
         random = soup.select_one("#randomWindowName")
         field = next((k for k in values if k.endswith("hfldUniqueTabGuid")), None)
@@ -181,6 +242,7 @@ def probe(
             data=values,
             headers={"Referer": str(landing.url)},
             finish_before_ms=finish_before_ms,
+            origin=origin,
         )
         last_response = response
         result["http_status"] = response.status_code

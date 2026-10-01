@@ -14,6 +14,7 @@ CITY_CINEMAS = {
 PROVIDERS = {
     "kinoteka": "kinoteka",
     "wisla": "msi_wisla",
+    "atlantic": "msi_atlantic",
     **dict.fromkeys(CITY_CINEMAS, "cinema_city"),
 }
 HISTORY_OFFSETS = (-1440, -720, -360, -180, -120, -60, -30, -15)
@@ -21,16 +22,23 @@ OFFSETS = {
     "kinoteka": (*HISTORY_OFFSETS, -5, 0, 5, 40),
     "cinema_city": (*HISTORY_OFFSETS, -5, 0, 5, 10),
     "msi_wisla": (*HISTORY_OFFSETS, -5, -2, 0, 5),
+    "msi_atlantic": (*HISTORY_OFFSETS, -5, 0, 5),
 }
 NAMES = {
     "kinoteka": "Kinoteka",
     **CITY_CINEMAS,
     "wisla": "Novekino Wisła",
+    "atlantic": "Novekino Atlantic",
 }
 RETRY_DELAY_MS = 30_000
 # Kinoteka/City reserve their request budgets. Wisla's 120s reserve prevents
 # immediate retries inside the 120s job window during this initial session pilot.
-RETRY_BUDGET_MS = {"kinoteka": 20_000, "cinema_city": 60_000, "msi_wisla": 120_000}
+RETRY_BUDGET_MS = {
+    "kinoteka": 20_000,
+    "cinema_city": 60_000,
+    "msi_wisla": 120_000,
+    "msi_atlantic": 120_000,
+}
 
 
 def cinema_name(cinema_id: str) -> str:
