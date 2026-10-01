@@ -383,3 +383,40 @@ These are observed available/unavailable counts, not confirmed purchases. Traffi
 increases with the number of screenings; review burst delays, rate limits and coverage
 before expanding. The retained post-start Kinoteka/Arkadia observations remain useful
 for final-count/cutoff validation.
+
+## Cinema City expansion — October 1
+
+All seven Cinema City venues on the legacy page are explicitly enabled: Arkadia,
+Bemowo, Sadyba (IMAX only), Galeria Mokotów, Promenada, Galeria Północna and Janki.
+They share one cinema_city cooldown/retry budget and the existing sequential worker.
+A block/rate limit applies to the whole chain. Stable identities include catalogue
+cinema plus presentation ID; network dispatch requires those cinema IDs to agree.
+No other provider is automatically enabled from the legacy catalogue.
+
+Fresh VPS tomorrow-booking probes passed for all six new venues:
+Bemowo 143 available / 24 unavailable / 167 total (presentation 1730784);
+Sadyba 318 / 49 / 367 (1728629);
+Mokotów 200 / 53 / 253 (1730660);
+Promenada 106 / 27 / 133 (1730720);
+Północna 130 / 24 / 154 (1730764);
+Janki 103 / 43 / 146 (1730740).
+These are samples, not sustained-load guarantees.
+
+Regular refresh now covers nine venues and two dates (18 scopes). Existing 45-second
+spacing means a healthy run can take around 13 minutes. The service timeout is now
+30 minutes, with a stuck warning after 25 minutes. The six-hour timer and seven-hour
+freshness threshold stay unchanged. Initial new-venue seed uses a single paced run
+with 15 seconds between 12 scopes; subsequent refreshes use the normal 45 seconds.
+Existing snapshots and attempts are preserved. Past slots are not backfilled.
+Review combined due-job bursts and observed queue delays before further expansion.
+
+Measured expansion forecast: maximum same-time group 55 overall and 20 near-start
+checks across current today/tomorrow schedules. Early snapshots (T-15 and earlier)
+now have 600 seconds of queue allowance, with their existing spread unchanged.
+Near-start checks retain 120 seconds, and Wisła's final cutoff remains stricter.
+Earliest-deadline dispatch prioritizes near-start work over queued historical work.
+Pending early jobs receive the extended deadline; finished attempts are untouched.
+Terminal attempt lines show each job's actual allowance. Historical times are target
+times, not a guarantee of exact-minute sampling; use actual attempt timestamps in analysis.
+Early Wisła network failures may now have sufficient time for the existing single retry;
+near-start Wisła still does not. Combined load needs observation under real failures.

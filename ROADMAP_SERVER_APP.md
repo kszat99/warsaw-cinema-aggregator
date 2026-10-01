@@ -6,6 +6,12 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1 Cinema City expansion: all seven venues from the legacy page passed fresh
+VPS booking probes. Enabled together under the shared chain cooldown and
+existing historical/late-check schedule; Sadyba remains IMAX-only.
+Early checks now have ten-minute queue slack after a measured 55-job peak; near-start
+windows remain two minutes. Refresh timeout now 30 minutes, stuck warning after 25.
+
 October 1: historical observation scheduling deployed for the three enabled venues.
 T-24h/-12h/-6h/-3h/-2h/-1h/-30m/-15m/-5m, plus existing Kinoteka/Arkadia late checks.
 Wisła's final check is now T-2, with a hard showtime cutoff and T-5 fallback.
@@ -619,6 +625,23 @@ Later: visitor analytics with intentional privacy/retention; limited earlier sea
 | Uncertain providers/timings | Phase 4 validation; never infer closure from generic errors |
 
 ## 13. Handover log
+
+October 1 Cinema City expansion: six new venue probes succeeded (Bemowo, Sadyba IMAX,
+Mokotów, Promenada, Północna, Janki). Schedule seed accepted all 12 cinema/date scopes
+for today/tomorrow. Venue names/IDs centralized; planner and network boundary require
+matching enabled cinema identity. One shared Cinema City cooldown/serial worker,
+existing historical offsets and T/T+5/T+10 maintained. Regular refresh now 18 scopes
+at 45s spacing: 30-minute service cap, 25-minute stuck warning instead of 10.
+Forecast max 55 simultaneous jobs overall and 20 near-start; early snapshots have
+10-minute queue slack to avoid forcing bursts, with deadline priority favouring
+near-start checks. Actual per-job allowance displayed. No schema migration. Existing
+history and unrelated local edits preserved. Sustained multi-venue coverage is pending;
+do not infer guaranteed coverage from smoke tests. VPS deployed and scheduler confirmed pending jobs for every venue: Sadyba 87,
+Bemowo 967, Promenada 1155, Janki 926, Mokotów 1269, Arkadia 1412 and Północna 1004
+at activation (today/tomorrow, early elapsed slots skipped). Kinoteka/Wisła retained.
+188 tests passed, strict lint/types and secret checks passed; worker, refresh and
+alert timers active. Scheduled observations after rollout remain to be reviewed.
+
 
 October 1 historical scheduling: at 10:50 only Kura had reached Wisła check times.
 Its 09:55 success (103/17/120) was followed by invalid_data at 10:00 and 10:05.

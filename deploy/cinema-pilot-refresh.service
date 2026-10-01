@@ -1,5 +1,5 @@
 [Unit]
-Description=Refresh Kinoteka and Arkadia pilot screenings
+Description=Refresh enabled cinema pilot screenings
 After=network-online.target
 Wants=network-online.target
 
@@ -11,7 +11,7 @@ WorkingDirectory=/opt/cinema-pilot
 Environment=CINEMA_API_DATABASE_PATH=/var/lib/cinema-pilot/cinema.sqlite3
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/opt/cinema-pilot/.venv/bin/python -m cinema_agg.server.pilot_refresh
-TimeoutStartSec=10min
+TimeoutStartSec=30min
 TimeoutStopSec=35
 StateDirectory=cinema-pilot
 UMask=0077

@@ -1,4 +1,4 @@
-"""Linux-only refresh owner for the isolated Kinoteka/Arkadia pilot database."""
+"""Linux-only refresh owner for all explicitly enabled pilot cinemas."""
 
 import asyncio
 import importlib
@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from .collector import WARSAW, collect, make_fetch, now_ms
 from .database import database_engine, require_schema
+from .seat_providers import PROVIDERS
 from .settings import Settings
 
 
@@ -53,7 +54,7 @@ def main() -> None:
             ) as client:
                 return await collect(
                     path,
-                    ["kinoteka", "1074", "wisla"],
+                    list(PROVIDERS),
                     [today, today + timedelta(days=1)],
                     make_fetch(client),
                 )

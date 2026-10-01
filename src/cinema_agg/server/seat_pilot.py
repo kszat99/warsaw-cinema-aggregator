@@ -15,18 +15,19 @@ from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
 
 import httpx
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, bindparam, text
 
 from .cinema_city_probe import presentation_id
 from .cinema_city_probe import probe as city_probe
 from .database import database_engine, require_schema
-from .seat_providers import OFFSETS as PROVIDER_OFFSETS
 from .seat_providers import (
+    CITY_CINEMAS,
     PROVIDERS,
     RETRY_BUDGET_MS,
     RETRY_DELAY_MS,
     transport_outcome,
 )
+from .seat_providers import OFFSETS as PROVIDER_OFFSETS
 from .settings import Settings
 from .wisla_probe import event_identity
 from .wisla_probe import probe as wisla_probe
@@ -53,8 +54,8 @@ def booking_identity(url: str) -> tuple[str, str]:
 def job_identity(cinema_id: str, url: str) -> tuple[str, str]:
     if cinema_id == "wisla":
         return "wisla", event_identity(url)
-    if cinema_id == "1074":
-        return "1074", presentation_id(url)
+    if cinema_id in CITY_CINEMAS:
+        return cinema_id, presentation_id(url)
     if cinema_id == "kinoteka":
         return booking_identity(url)
     raise ValueError("Cinema not enabled")
@@ -83,13 +84,14 @@ def plan(
                     "screenings "
                     "WHERE snapshot_id=(SELECT id FROM imports ORDER BY "
                     "generated_at_ms DESC LIMIT 1) "
-                    "AND cinema_id IN ('kinoteka','1074','wisla') AND "
+                    "AND cinema_id IN :enabled_cinemas AND "
                     "(:cinema_id IS NULL OR cinema_id=:cinema_id) "
                     "AND starts_at_ms >= :oldest "
                     "AND starts_at_ms <= :horizon AND scraped_at_ms >= :fresh "
                     "ORDER BY starts_at_ms, ordinal"
-                ),
+                ).bindparams(bindparam("enabled_cinemas", expanding=True)),
                 {
+                    "enabled_cinemas": tuple(PROVIDERS),
                     "cinema_id": cinema_id,
                     "oldest": now + 5 * MINUTE if diagnostic else now - 42 * MINUTE,
                     "horizon": now + FRESHNESS,
@@ -177,7 +179,9 @@ def plan(
                     ).scalar()
                 ):
                     continue
-                deadline = due + 2 * MINUTE
+                deadline = (
+                    due + (10 if offset <= -15 and not diagnostic else 2) * MINUTE
+                )
                 if provider == "msi_wisla" and offset == -2 and not diagnostic:
                     deadline = row["starts_at_ms"] - 1
                 result = connection.execute(
@@ -192,7 +196,11 @@ def plan(
                         ":purpose, "
                         ":due, :deadline, :state) ON CONFLICT(id) DO UPDATE SET "
                         "source_observed_ms=excluded.source_observed_ms, "
-                        "title=excluded.title"
+                        "title=excluded.title, deadline_ms=CASE "
+                        "WHEN seat_jobs.state='pending' "
+                        "AND seat_jobs.purpose='scheduled' "
+                        "AND seat_jobs.offset_minutes<=-15 THEN excluded.deadline_ms "
+                        "ELSE seat_jobs.deadline_ms END"
                     ),
                     {
                         "id": job_id,
@@ -351,8 +359,8 @@ def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
         }
         event = str(job["cinema_event"])
         if (
-            job.get("cinema_id") != "1074"
-            or job["provider_cinema"] != "1074"
+            job.get("cinema_id") not in CITY_CINEMAS
+            or job["provider_cinema"] != job.get("cinema_id")
             or not event.isdigit()
         ):
             return {**empty, "outcome": "invalid_data"}

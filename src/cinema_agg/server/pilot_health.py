@@ -269,7 +269,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     if (
         latest
         and latest["status"] == "running"
-        and now - latest["started_at_ms"] > 10 * MINUTE
+        and now - latest["started_at_ms"] > 25 * MINUTE
     ):
         issues.append("schedule_refresh_stuck")
     if overdue:
@@ -404,7 +404,7 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             "manual check"
             if job["purpose"] == "diagnostic"
             else (
-                "within 120s allowance"
+                f"within {(job['deadline_ms']-job['due_at_ms'])/1000:g}s allowance"
                 if actual <= job["deadline_ms"]
                 else "OUTSIDE allowance"
             )
@@ -518,7 +518,7 @@ ISSUE_HELP = {
     "Check: sudo journalctl -u cinema-pilot-refresh -n 30 --no-pager",
     "latest_refresh_failed_or_partial": "Latest refresh did not complete successfully. "
     "See cinema/date outcomes below; retained schedules may be older.",
-    "schedule_refresh_stuck": "Refresh has been running for over 10 minutes. "
+    "schedule_refresh_stuck": "Refresh has been running for over 25 minutes. "
     "Inspect cinema-pilot-refresh logs.",
     "overdue_unfinished_jobs": "Checks passed their deadline but are unfinished. "
     "Affected jobs follow; inspect worker logs.",
@@ -770,7 +770,7 @@ def render(data: dict[str, Any]) -> str:
             f"  Optional Wisła final checks skipped for insufficient time: "
             f"{seats.get('cutoff_skipped', 0)} (excluded from coverage)",
             f"  Max attempt start delay: {age(seats['max_start_delay_seconds'])}s "
-            "| allowance 120s",
+            "| allowance: near-start 120s, historical 600s",
             f"  Attempts: {json.dumps(seats['attempt_outcomes'], sort_keys=True)}",
         ]
     )
