@@ -94,6 +94,8 @@ def test_targeted_verification_fetches_single_scope_and_respects_spacing(engine,
     job=claim(engine,NOW,dispatch_group='cinema_city')
     with engine.begin() as db:
         request_verification(db,job,NOW)
+    finish(engine,job,dict(outcome='screening_missing',http_status=200,
+        available=None,unavailable=None,capacity=None,cooldown_ms=0),NOW+1)
     calls=[]
     async def fetch(cinema,day):
         calls.append((cinema,day))
@@ -102,9 +104,18 @@ def test_targeted_verification_fetches_single_scope_and_respects_spacing(engine,
     monkeypatch.setattr(collector,'now_ms',lambda:NOW+2000)
     monkeypatch.setattr(schedule_changes,'importlib',SimpleNamespace(
         import_module=lambda name:SimpleNamespace(flock=lambda *args:None,LOCK_EX=1,LOCK_NB=2)))
-    assert schedule_changes.verify_next(tmp_path/'seats.sqlite3',NOW+1000)
+    assert schedule_changes.verify_next(tmp_path/'seats.sqlite3',NOW+6000)
     assert calls==[('1074',datetime.fromtimestamp(NOW/1000,WARSAW).date())]
     with engine.begin() as db:
         db.execute(text("INSERT INTO schedule_refresh_requests (cinema_id,target_date,requested_ms,due_ms,state) VALUES ('1070','2026-09-30',:now,:now,'pending')"),{'now':NOW})
-    assert not schedule_changes.verify_next(tmp_path/'seats.sqlite3',NOW+2000)
+    assert not schedule_changes.verify_next(tmp_path/'seats.sqlite3',NOW+7000)
     assert len(calls)==1
+
+
+def test_verification_reserves_city_requests_but_not_other_provider(engine):
+    add_arkadia(engine)
+    plan(engine,NOW)
+    with engine.begin() as db:
+        db.execute(text("INSERT INTO schedule_refresh_requests (cinema_id,target_date,requested_ms,due_ms,started_ms,state) VALUES ('1074','2026-09-29',:now,:now,:now,'running')"),{'now':NOW})
+    assert claim(engine,NOW,dispatch_group='cinema_city') is None
+    assert claim(engine,NOW,dispatch_group='kinoteka') is not None

@@ -607,7 +607,9 @@ replacement showing. schedule_removals stores the confirming run and verificatio
 Cinema City PRESENTATION_NOT_FOUND queues a durable cinema/date refresh request.
 The worker performs it in a separate thread, sharing the regular refresh flock;
 requests deduplicate by cinema/date and targeted refreshes have global 15-minute
-minimum spacing and respect provider cooldown. Restarted requests recover after a
+minimum spacing and respect provider cooldown. A running verification reserves
+Cinema City request capacity across processes; other providers continue.
+Restarted requests recover after a
 five-minute lease. A missing-only incident has at most 15 minutes verification grace.
 If accepted fresh data still lists the broken booking, verification fails, or grace
 expires, the alert shows provider error code and booking URL. Confirmed removal

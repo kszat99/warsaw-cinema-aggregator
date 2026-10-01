@@ -18,7 +18,10 @@ refresh flock, provider cooldown and global 15-minute minimum targeted spacing.
 Only missing-booking incidents get up to 15 minutes verification grace; accepted
 refresh still listing the booking, failed verification, or grace expiry remains
 alertable. Confirmed removal resolves as schedule_changed without fictitious seat
-recovery. Worker dispatch continues while verification runs. Deployment pending.
+recovery. Other providers continue while verification reserves Cinema City dispatch capacity.
+Live schema migration backed up and verified. Original Mokotów booking 1721575
+confirmed absent by accepted targeted refresh; 11 pending jobs superseded, failed
+attempt retained, replacement 1731203 planned independently. Final dispatch verification pending.
 
 
 October 1 cutoff policy update: routine T0/T+5 removed for Wisła, Atlantic and

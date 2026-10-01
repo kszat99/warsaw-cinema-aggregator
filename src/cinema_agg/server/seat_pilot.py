@@ -369,6 +369,8 @@ def claim(
                     "SELECT * FROM seat_jobs WHERE state='pending' AND due_at_ms <= "
                     ":now "
                     "AND provider IN :allowed "
+                    "AND NOT (provider='cinema_city' AND EXISTS "
+                    "(SELECT 1 FROM schedule_refresh_requests WHERE state='running')) "
                     "AND (retry_at_ms IS NULL OR retry_at_ms<=:now) "
                     "AND (:diagnostic=0 OR purpose='diagnostic') "
                     "AND provider IN (SELECT provider FROM seat_provider_status "
@@ -788,10 +790,15 @@ def main() -> None:
                             flush=True,
                         )
                     refresh_future = None
-                if refresh_future is None and now - last_verification_poll >= MINUTE:
-                    from .schedule_changes import verify_next
+                if (
+                    refresh_future is None
+                    and "cinema_city" not in active
+                    and now - last_verification_poll >= 5000
+                ):
+                    from .schedule_changes import verification_due, verify_next
 
-                    refresh_future = pool.submit(verify_next, path, now)
+                    if verification_due(engine, now):
+                        refresh_future = pool.submit(verify_next, path, now)
                     last_verification_poll = now
                 if now - last_plan >= MINUTE:
                     snapshot = latest_snapshot_id(engine)
@@ -801,6 +808,8 @@ def main() -> None:
                         last_full_plan = now
                     last_plan = now
                 for group in DISPATCH_GROUPS:
+                    if group == "cinema_city" and refresh_future is not None:
+                        continue
                     if group not in active:
                         job = claim(engine, clock_ms(), dispatch_group=group)
                         if job:

@@ -16,6 +16,35 @@ WARSAW = ZoneInfo("Europe/Warsaw")
 REFRESH_SPACING_MS = 15 * 60_000
 
 
+def verification_due(engine: Any, now: int) -> bool:
+    connection = engine.raw_connection()
+    try:
+        if (
+            connection.cursor()
+            .execute(
+                "SELECT 1 FROM schedule_refresh_requests WHERE state='running' "
+                "AND started_ms<? LIMIT 1",
+                (now - 5 * 60_000,),
+            )
+            .fetchone()
+        ):
+            return True
+        return bool(
+            connection.cursor()
+            .execute(
+                "SELECT 1 FROM schedule_refresh_requests WHERE state='pending' "
+                "AND due_ms<=? AND coalesce((SELECT cooldown_until_ms "
+                "FROM seat_provider_status WHERE provider='cinema_city'),0)<=? "
+                "AND coalesce((SELECT max(started_ms) "
+                "FROM schedule_refresh_requests),0)+?<=? LIMIT 1",
+                (now, now, REFRESH_SPACING_MS, now),
+            )
+            .fetchone()
+        )
+    finally:
+        connection.close()
+
+
 def request_verification(connection: Connection, job: Any, now: int) -> None:
     day = datetime.fromtimestamp(job["starts_at_ms"] / 1000, WARSAW).date().isoformat()
     connection.execute(
@@ -162,6 +191,14 @@ def verify_next(path: Path, now: int) -> bool:
                     .first()
                 )
                 if row is None:
+                    return False
+                if connection.execute(
+                    text(
+                        "SELECT count(*) FROM seat_jobs WHERE provider='cinema_city' "
+                        "AND state='running' AND lease_until_ms>=:now"
+                    ),
+                    {"now": now},
+                ).scalar_one():
                     return False
                 request = dict(row)
                 from .seat_providers import PROVIDERS
