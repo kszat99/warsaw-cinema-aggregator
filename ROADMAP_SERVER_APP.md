@@ -16,7 +16,9 @@ screening before showtime. No network, HTTP, validation or pre-start failure is
 silenced. Resolution is labelled expected_cutoff, never a fictitious seat recovery.
 Health retains these observations and last pre-start counts without open warnings.
 Historical technical failures and missed jobs can still produce ATTENTION.
-Deployment verification pending.
+Deployed as 7ad27b3; worker active. Verified zero pending removed T0/T+5 windows;
+17 evidenced cutoff alert records resolved. Health displays EXPECTED CUTOFF with
+last pre-start counts. Other historical technical failures/misses remain visible.
 
 
 October 1 18:53 incident review: Novekino showtime unavailability repeats;
