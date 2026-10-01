@@ -1047,3 +1047,17 @@ or request concurrency. No claim of eliminating all future misses.
 Regular planner remains one owner with unchanged-snapshot skip and ten-minute horizon
 refresh. Threads perform network work outside short SQLite claim/finish transactions.
 Health and alerts continue tracking missed slots, actual attempts and provider cooldowns.
+
+
+Deployment 21f3554 active; prior wheel retained in
+/home/ubuntu/cinema-pilot-rollback-provider-dispatch/. No schema changes.
+Live labelled diagnostics saved by new worker: Arkadia Resident Evil 98 available
+/42 unavailable /140; Kinoteka W sercu dziczy 177/8/185; Atlantic Lalka 161/60/221.
+These confirm dispatch/saving in each group, not a sustained-burst guarantee.
+Zero overdue jobs at verification. Local suite 211 passed; lint/mypy/source scan
+passed. Full refresh ed343e7fddc446f587960b57f49806ee completed all 20 scopes and
+published snapshot f9c10cd2460cb2175b734c28a42b782fba63b7629f6f02f340f366d315a0977e,
+confirming recovery from earlier database-lock interruption.
+Next review: upcoming burst coverage and delays; improve missed-window notices with
+explicit no-request-started evidence and later same-screening observations. Do not
+expand chain-internal concurrency or relax pre-start deadlines without evidence.
