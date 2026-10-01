@@ -511,7 +511,13 @@ def finish(
             current["purpose"] == "scheduled"
             and current["retry_at_ms"] is None
             and attempts == 1
-            and result["outcome"] in {"network_error", "timeout"}
+            and (
+                result["outcome"] in {"network_error", "timeout"}
+                or (
+                    result["outcome"] == "upstream_error"
+                    and result.get("http_status") in {500, 502, 503, 504}
+                )
+            )
             and not result["cooldown_ms"]
             and retry_at + RETRY_BUDGET_MS[current["provider"]]
             <= current["deadline_ms"]

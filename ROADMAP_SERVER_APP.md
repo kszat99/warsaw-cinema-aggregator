@@ -6,6 +6,13 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1 transient HTTP retry: HTTP 500/502/503/504 now qualify for the existing
+single delayed retry (30 seconds), only for scheduled checks with enough request
+budget inside the original deadline. Provider pacing and cooldowns still apply.
+Both attempts remain in SQLite; no historical failed jobs are automatically replayed.
+Deployment verification pending.
+
+
 October 1 Cinema City expansion: all seven venues from the legacy page passed fresh
 VPS booking probes. Enabled together under the shared chain cooldown and
 existing historical/late-check schedule; Sadyba remains IMAX-only.
@@ -98,7 +105,7 @@ Next: validate sustained coverage and hall formats before adding other venues.
    This review gates provider expansion, not all parallel development.
 3. **Bounded transient seat retries — deployed:** one retry after 30 seconds for the first
    scheduled network error/timeout, reserving 20s Kinoteka or 60s Cinema City before the
-   original deadline. Both attempts persist; no retry for TLS, HTTP errors, blocks, invalid
+   original deadline. Both attempts persist; no retry for TLS, other HTTP errors, blocks, invalid
    data, closure or diagnostics. Review real retry outcomes during the pilot.
 4. **Broaden collection one provider at a time:** validate fresh schedules, identity, seat
    counts, TLS, browser resource usage and timings on the VPS before enabling each provider.
@@ -272,7 +279,7 @@ Failure disables only the affected seat capability. Do not silently remove its c
 - Bound traffic by provider/host, not merely cinema. Ingestion and seat processes share request budgets; defer lower-priority refresh work when seat deadlines need the allowance.
 - Retain cautious Multikino pacing initially. Cache static metadata/seat plans only with identity/version validation.
 - Limit redirects, response sizes, per-request timeouts and total job duration. Respect Retry-After and upstream restrictions. Repeated access denial causes a cooldown, not escalating requests or rotating identities.
-- Current pilot: at most one additional attempt for network errors/timeouts, after 30s and only when delay plus expected duration fits the original window. No automatic retries for TLS, HTTP errors (including 5xx/429), malformed data or confirmed closure. Broader retry classes require separate provider evidence and review; respect provider cooldowns.
+- Current pilot: at most one additional attempt for network errors/timeouts and HTTP 500/502/503/504, after 30s and only when delay plus expected duration fits the original window. No automatic retries for TLS, other HTTP errors (including 404/429/501), malformed data or confirmed closure. Broader retry classes require separate provider evidence and review; respect provider cooldowns.
 - Persist provider cooldowns. Permit one controlled recovery probe, not one probe from every queued screening.
 
 ## 5. Data model and integrity

@@ -143,3 +143,28 @@ def test_certificate_errors_are_classified_without_retry(cinema):
         raise httpx.ConnectError('sanitized') from ssl.SSLCertVerificationError('certificate failed')
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         assert probe(client,job)['outcome'] == 'tls_error'
+
+
+@pytest.mark.parametrize('status', [500, 502, 503, 504])
+def test_transient_http_failure_retries_once_and_recovers(engine, status):
+    add_arkadia(engine)
+    plan(engine, NOW, cinema_id='1074')
+    job = claim(engine, NOW)
+    failure = {**result('upstream_error'), 'http_status': status}
+    finish(engine, job, failure, NOW+1000)
+    assert failure['retry_scheduled'] is True
+    assert claim(engine, NOW+30_000) is None
+    retry = claim(engine, NOW+31_000)
+    assert retry['id'] == job['id']
+    finish(engine, retry, result('success'), NOW+32_000)
+    with engine.connect() as db:
+        assert db.execute(text('SELECT count(*) FROM seat_observations WHERE job_id=:id'), {'id':job['id']}).scalar_one() == 2
+        assert db.execute(text('SELECT state FROM seat_jobs WHERE id=:id'), {'id':job['id']}).scalar_one() == 'done'
+
+
+@pytest.mark.parametrize('status', [400, 401, 403, 404, 429, 501, 505])
+def test_other_http_errors_do_not_retry(engine, status):
+    plan(engine, NOW)
+    failure = {**result('upstream_error'), 'http_status': status}
+    finish(engine, claim(engine, NOW), failure, NOW+1)
+    assert failure['retry_scheduled'] is False
