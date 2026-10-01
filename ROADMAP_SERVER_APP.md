@@ -960,3 +960,29 @@ now accepts either advertised transaction mode for the validated event and conve
 the entry to purchase typetran=0 before the read-only handshake. No seats are selected.
 Regression covers both link modes. Previous missing-link alert reflects our lookup
 bug, not proof of cancellation, sold-out status or sales closure.
+
+
+## October 1: classify availability separately from technical errors
+
+New MSI observations use sales_unavailable only for the explicit provider sales
+message; listing_absent only when the repertoire omits the event and a direct
+booking fallback returns repertoire rather than a map. Neither outcome implies
+sold out or establishes the exact cutoff. Parser/handshake mismatches are
+ data_validation_error; network/timeouts/HTTP blocks remain separately classified.
+Sanitized failure evidence stays in SQLite. Historical outcomes are not rewritten.
+Availability observations have their own status section and are excluded from
+technical failed-attempt counts, while missing seat snapshots still lower seat-count
+coverage. Availability episodes still generate deduplicated notices and remain
+visible as attention until a same-screening success or the historical reporting
+window rules apply. Explicit unavailable sales never counts as successful recovery.
+Telegram headline SEAT AVAILABILITY UNAVAILABLE distinguishes these from SEAT CHECK
+FAILED; includes latest T offset and actual attempt timestamp, cause/path/status,
+and omits irrelevant zero controls for repertoire/handshake availability pages.
+
+Atlantic repertoire absence now falls back to the validated numeric event's
+Default.aspx entry, preserving same-origin Referer and TLS validation. Bound of four
+request hops per phase supports its redirects; Wisła keeps the prior two-hop bound.
+No seat controls are posted. VPS read-only test of past Lalka 47590 reached
+Message.aspx with explicit sales unavailable, rather than stopping at repertoire
+absence. Wisła Tedi 114826 likewise explicitly reports sales unavailable. These
+current tests validate classification, not retrospective closure timestamps.

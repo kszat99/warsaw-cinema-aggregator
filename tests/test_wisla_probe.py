@@ -67,7 +67,7 @@ def test_technical_failure_is_never_closed_or_zero(mode):
     client, _ = client_for(mode)
     with client:
         result = probe(client, "114926", START)
-    assert result["outcome"] == "invalid_data"
+    assert result["outcome"] == "data_validation_error"
     assert result["available"] is None
 
 
@@ -212,3 +212,41 @@ def test_atlantic_identity_is_separate_from_wisla():
     assert event_identity(url, ATLANTIC_ORIGIN) == "123"
     with pytest.raises(ValueError):
         event_identity(url)
+
+
+def test_explicit_sales_unavailable_keeps_unknown_counts_and_evidence():
+    def handler(request):
+        return httpx.Response(
+            200, text="Sprzedaż biletów dla wybranego wydarzenia jest niedostępna."
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = probe(client, "123", START)
+    assert result["outcome"] == "sales_unavailable"
+    assert result["available"] is None
+    assert "Sprzedaż biletów" in result["diagnostics"]["response_text"]
+
+
+@pytest.mark.parametrize("map_works", [True, False])
+def test_missing_atlantic_listing_tries_direct_booking(map_works):
+    from cinema_agg.server.wisla_probe import ATLANTIC_ORIGIN
+
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if request.url.path == "/MSI/mvc/pl":
+            return httpx.Response(200, text="repertoire")
+        if request.method == "POST":
+            return httpx.Response(302, headers={"Location": "/MSI/OrderTickets.aspx"})
+        if request.url.path == "/MSI/Default.aspx":
+            return httpx.Response(200, text=LANDING)
+        if not map_works:
+            return httpx.Response(302, headers={"Location": "/MSI/mvc/pl"})
+        return httpx.Response(200, text=MAP)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = probe(client, "123", START, origin=ATLANTIC_ORIGIN)
+    assert result["outcome"] == ("success" if map_works else "listing_absent")
+    assert result["diagnostics"]["direct_booking_fallback"]
+    assert any(r.method == "POST" for r in calls)

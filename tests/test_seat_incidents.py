@@ -146,7 +146,7 @@ def test_alert_includes_saved_failure_evidence(engine):
     with engine.connect() as db:
         message = incident_message(incidents(db, NOW + MINUTE)[0])
     assert "Published seat counts do not agree" in message
-    assert "Failed step: seat_map" in message
+    assert "Check step: seat_map" in message
     assert "HTTP: 200" in message
     assert "482" in message
     assert "secret-long-body" not in message
@@ -160,3 +160,18 @@ def test_old_failure_alert_explains_missing_evidence(engine):
     with engine.connect() as db:
         message = incident_message(incidents(db, NOW + MINUTE)[0])
     assert "older attempt has no detailed response evidence" in message
+
+
+def test_availability_notice_is_separate_from_technical_failure(engine, tmp_path):
+    from cinema_agg.server.seat_incidents import incidents, incident_message
+
+    plan(engine, NOW)
+    observation(engine, NOW, "sales_unavailable")
+    data = report(tmp_path / "seats.sqlite3", NOW + MINUTE)
+    assert not data["evidence"]["failed_attempts"]
+    assert len(data["evidence"]["availability_attempts"]) == 1
+    with engine.connect() as db:
+        message = incident_message(incidents(db, NOW + MINUTE)[0])
+    assert message.startswith("SEAT AVAILABILITY UNAVAILABLE")
+    assert "Latest scheduled check: T-5 minutes" in message
+    assert "not proof of a collector outage" in message

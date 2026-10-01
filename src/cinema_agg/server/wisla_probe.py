@@ -17,6 +17,25 @@ ATLANTIC_ORIGIN = "https://atlantic.novekino.pl"
 ORIGINS = {ORIGIN, ATLANTIC_ORIGIN}
 
 
+SALES_MESSAGE = "Sprzedaż biletów dla wybranego wydarzenia jest niedostępna"
+
+
+class SalesUnavailable(Exception):
+    """Provider explicitly says sales unavailable; reason is not inferred."""
+
+
+class ListingAbsent(Exception):
+    """Listing absent and direct booking did not provide a seat map."""
+
+
+def check_sales_message(response: httpx.Response) -> None:
+    soup = BeautifulSoup(response.text, "lxml")
+    for node in soup.select("script, style"):
+        node.decompose()
+    if SALES_MESSAGE in soup.get_text(" ", strip=True):
+        raise SalesUnavailable("Provider explicitly reports ticket sales unavailable")
+
+
 class CutoffExpired(Exception):
     """Do not continue a final observation after the screening starts."""
 
@@ -45,7 +64,7 @@ def request(
     origin: str = ORIGIN,
     **kwargs: Any,
 ) -> httpx.Response:
-    for _ in range(2):
+    for _ in range(4 if origin == ATLANTIC_ORIGIN else 2):
         if origin not in ORIGINS or not url.startswith(origin + "/MSI/"):
             raise ValueError("Unapproved redirect")
         remaining = (
@@ -166,6 +185,7 @@ def probe(
     client.cookies.clear()
     phase = "identity"
     last_response = None
+    listing_missing = False
     try:
         if origin not in ORIGINS or not re.fullmatch(r"[0-9]{1,12}", event):
             raise ValueError("Invalid event")
@@ -205,9 +225,11 @@ def probe(
                     candidates.append(
                         re.sub(r"([?&]typetran=)1(?=&|$)", r"\g<1>0", candidate)
                     )
-            if not candidates:
-                raise ValueError("Booking link absent from Atlantic repertoire")
-            entry = candidates[0]
+            listing_missing = not candidates
+            if candidates:
+                entry = candidates[0]
+            # Otherwise use the validated numeric event in our Default.aspx entry.
+            # A missing repertoire link alone does not establish sales closure.
         phase = "handshake"
         landing = request(
             client,
@@ -218,6 +240,11 @@ def probe(
             origin=origin,
         )
         last_response = landing
+        check_sales_message(landing)
+        if listing_missing and landing.url.path == "/MSI/mvc/pl":
+            raise ListingAbsent(
+                "Listing absent; direct booking returned repertoire, not a seat map"
+            )
         soup = BeautifulSoup(landing.text, "lxml")
         values = {
             str(n["name"]): str(n.get("value", ""))
@@ -248,7 +275,23 @@ def probe(
         )
         last_response = response
         result["http_status"] = response.status_code
+        check_sales_message(response)
+        if listing_missing and response.url.path == "/MSI/mvc/pl":
+            raise ListingAbsent(
+                "Listing absent; direct booking returned repertoire, not a seat map"
+            )
         result.update(parse(response))
+        if listing_missing:
+            result.setdefault("diagnostics", {})
+            result["diagnostics"] = result["diagnostics"] or {}
+            result["diagnostics"]["direct_booking_fallback"] = True
+    except (SalesUnavailable, ListingAbsent) as exc:
+        result["outcome"] = (
+            "sales_unavailable"
+            if isinstance(exc, SalesUnavailable)
+            else "listing_absent"
+        )
+        result["diagnostics"] = {"phase": phase, "reason": str(exc)}
     except CutoffExpired:
         result["outcome"] = "deadline_exceeded"
     except httpx.HTTPStatusError as exc:
@@ -268,7 +311,7 @@ def probe(
     except httpx.HTTPError as exc:
         result["outcome"] = transport_outcome(exc)
     except (ValueError, KeyError, TypeError) as exc:
-        result["outcome"] = "invalid_data"
+        result["outcome"] = "data_validation_error"
         result["diagnostics"] = {"phase": phase, "reason": str(exc)[:200]}
     finally:
         if result.get("outcome") != "success" and last_response is not None:
@@ -289,6 +332,8 @@ def probe(
                 response_text_truncated=len(visible) > 24000,
                 response_bytes=len(last_response.content),
                 available_controls=available_controls,
+                listing_absent=listing_missing,
+                direct_booking_fallback=listing_missing,
             )
             for key, pattern in (
                 ("published_available", r"Dostępnych\s+miejsc\s*:\s*(\d+)"),

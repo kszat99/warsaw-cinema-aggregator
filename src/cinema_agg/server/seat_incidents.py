@@ -60,6 +60,7 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
         active[key]["failed_attempt_ids"].append(row["id"])
         active[key]["failed_job_ids"].append(row["job_id"])
         active[key]["last_failure_ms"] = row["attempted_at_ms"]
+        active[key]["last_offset_minutes"] = row["offset_minutes"]
         active[key]["last_outcome"] = row["outcome"]
         active[key]["last_http_status"] = row["http_status"]
         active[key]["last_diagnostics_json"] = row["diagnostics_json"]
@@ -70,14 +71,21 @@ def incident_message(incident: dict[str, Any]) -> str:
     from .pilot_health import local_time, safe_label
 
     recovery = incident["recovery"]
-    headline = "RECOVERED: seat checks" if recovery else "SEAT CHECK FAILED"
+    availability = incident["last_outcome"] in {"sales_unavailable", "listing_absent"}
+    headline = (
+        "RECOVERED: seat checks"
+        if recovery
+        else ("SEAT AVAILABILITY UNAVAILABLE" if availability else "SEAT CHECK FAILED")
+    )
     lines = [
         headline,
         cinema_name(incident.get("cinema_id", "kinoteka")),
         safe_label(incident["title"])[:180],
         "Screening: " + local_time(incident["starts_at_ms"]),
         "First failed attempt: " + local_time(incident["first_failure_ms"]),
-        f"Failed attempts: {incident['failures']} | {incident['last_outcome']}",
+        f"Unsuccessful attempts: {incident['failures']} | {incident['last_outcome']}",
+        f"Latest scheduled check: T{incident.get('last_offset_minutes', 0):+d} minutes",
+        "Latest attempt: " + local_time(incident["last_failure_ms"]),
     ]
     details = json.loads(incident.get("last_diagnostics_json") or "{}")
     reasons = {
@@ -131,11 +139,20 @@ def incident_message(incident: dict[str, Any]) -> str:
             "Page says: ticket sales for this event are unavailable. Sold-out "
             "versus sales cutoff is not established."
         )
+    if availability:
+        lines.append(
+            "Availability observation, not proof of a collector outage "
+            "or a sold-out screening."
+        )
     if details:
-        lines.append("Failed step: " + safe_label(str(details.get("phase", "unknown"))))
+        lines.append("Check step: " + safe_label(str(details.get("phase", "unknown"))))
         if details.get("path"):
             lines.append("Returned page: " + safe_label(str(details["path"])))
-        if details.get("available_controls") is not None:
+        if (
+            details.get("available_controls") is not None
+            and details.get("phase") == "seat_map"
+            and not availability
+        ):
             lines.append(
                 f"Selectable controls in response: {details['available_controls']}"
             )

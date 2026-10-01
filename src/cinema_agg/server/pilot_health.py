@@ -280,7 +280,10 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     if backup["status"] != "ok":
         issues.append("backup_" + backup["status"])
     failures = {
-        k: v for k, v in outcomes.items() if k not in {"success", "running", "closed"}
+        k: v
+        for k, v in outcomes.items()
+        if k
+        not in {"success", "running", "closed", "sales_unavailable", "listing_absent"}
     }
     if failures:
         issues.append("seat_errors_in_window")
@@ -333,7 +336,20 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                 a
                 for a in attempts
                 if a["purpose"] == "scheduled"
-                and a["outcome"] not in {"success", "running", "closed"}
+                and a["outcome"]
+                not in {
+                    "success",
+                    "running",
+                    "closed",
+                    "sales_unavailable",
+                    "listing_absent",
+                }
+            ],
+            "availability_attempts": [
+                a
+                for a in attempts
+                if a["purpose"] == "scheduled"
+                and a["outcome"] in {"sales_unavailable", "listing_absent"}
             ],
             "recent_attempts": attempts[:5],
             "upcoming": upcoming,
@@ -522,7 +538,8 @@ ISSUE_HELP = {
     "Review manual copies and retention; budget is a warning, not destructive pruning.",
     "external_heartbeat_failed_or_stale": "External heartbeat failed or is older "
     "than 25 minutes. See heartbeat details; inspect cinema-pilot-alerts logs.",
-    "seat_incident_open": "A screening has failed checks with no later success "
+    "seat_incident_open": "A screening has unsuccessful checks "
+    "(technical or availability) with no later success "
     "for the same event and start time. See unresolved incidents below.",
     "notification_delivery_pending": "Telegram messages are waiting for delivery. "
     "Delivery details follow; the alert timer retries failures every 15 minutes.",
@@ -732,6 +749,10 @@ def render(data: dict[str, Any]) -> str:
         )
         for job in evidence["problem_jobs"]:
             lines.extend(job_lines(job))
+    if evidence.get("availability_attempts"):
+        lines.append("\nAVAILABILITY OBSERVATIONS (not technical failures)")
+        for item in evidence["availability_attempts"]:
+            lines.extend(job_lines(item, attempt=True))
     if evidence["failed_attempts"]:
         lines.append("\nFAILED ATTEMPTS (all in window)")
         for item in evidence["failed_attempts"]:
