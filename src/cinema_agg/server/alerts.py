@@ -143,7 +143,10 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
     current.update(
         k
         for k, i in screening_incidents.items()
-        if not i["recovery"] and not i.get("expected_cutoff")
+        if not i["recovery"]
+        and not i.get("expected_cutoff")
+        and not i.get("schedule_changed")
+        and not i.get("verification_pending")
     )
     engine = database_engine(path, readonly=False)
     try:
@@ -167,17 +170,26 @@ def evaluate_alerts(path: Path, now: int, settings: Settings) -> None:
                 state = old["state"] if old else "resolved"
                 evidence = json.loads(old["evidence"] or "{}") if old else {}
                 if active:
-                    if state in {"resolved", "pending_resolved"}:
+                    if state in {
+                        "resolved",
+                        "pending_resolved",
+                        "verification_pending",
+                    }:
                         state = "pending_open"
                         evidence = {}
                     elif state == "open" and old and old["last_notified_ms"] == 0:
                         # Repair legacy records incorrectly marked open after fa
                         state = "pending_open"
-                elif state in {"open", "pending_open"}:
+                elif state in {"open", "pending_open", "verification_pending"}:
                     state = "pending_resolved"
                     evidence = {}
                 if issue in screening_incidents:
                     incident = screening_incidents[issue]
+                    if incident.get("schedule_changed"):
+                        state = "resolved"
+                        evidence["resolution"] = "schedule_changed"
+                    elif incident.get("verification_pending"):
+                        state = "verification_pending"
                     if incident.get("expected_cutoff"):
                         # Policy retirement is not a successful seat recovery.
                         state = "resolved"

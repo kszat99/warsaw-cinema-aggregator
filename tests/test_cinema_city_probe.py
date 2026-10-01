@@ -6,6 +6,16 @@ from cinema_agg.server.cinema_city_probe import probe, presentation_id
 URL = 'https://tickets.cinema-city.pl/order/12345'
 
 
+def test_missing_event_reports_provider_code_not_http_failure():
+    with httpx.Client(transport=httpx.MockTransport(lambda request:
+        httpx.Response(200,json={'error':{'error':'PRESENTATION_NOT_FOUND'}}))) as c:
+        result=probe(c,URL)
+    assert result['outcome']=='screening_missing'
+    assert result['http_status']==200
+    assert result['diagnostics']['provider_code']=='PRESENTATION_NOT_FOUND'
+    assert result['diagnostics']['booking_url']==URL+'?lang=pl'
+
+
 def client(statuses=None, code=200, reserved=1, event=12345):
     requests = []
     def handler(request):

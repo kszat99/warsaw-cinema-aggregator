@@ -1,10 +1,12 @@
 """Derive screening-specific failure episodes without discarding observations."""
 
 import json
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Connection, text
 
+from .schedule_changes import WARSAW
 from .seat_providers import EXPECTED_CUTOFF_OUTCOMES, cinema_name
 
 
@@ -64,6 +66,7 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
                 "last_outcome": row["outcome"],
                 "failures": 0,
                 "failed_attempt_ids": [],
+                "failed_outcomes": [],
                 "failed_job_ids": [],
                 "recovery": None,
                 "expected_cutoff": expected,
@@ -74,12 +77,55 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
         active[key]["expected_cutoff"] = active[key]["expected_cutoff"] and expected
         active[key]["failures"] += 1
         active[key]["failed_attempt_ids"].append(row["id"])
+        active[key]["failed_outcomes"].append(row["outcome"])
         active[key]["failed_job_ids"].append(row["job_id"])
         active[key]["last_failure_ms"] = row["attempted_at_ms"]
         active[key]["last_offset_minutes"] = row["offset_minutes"]
         active[key]["last_outcome"] = row["outcome"]
         active[key]["last_http_status"] = row["http_status"]
         active[key]["last_diagnostics_json"] = row["diagnostics_json"]
+    removals = {
+        row["job_id"]: dict(row)
+        for row in connection.execute(
+            text("SELECT * FROM schedule_removals")
+        ).mappings()
+    }
+    for incident in result:
+        incident["schedule_changed"] = all(
+            job in removals for job in incident["failed_job_ids"]
+        )
+        day = (
+            datetime.fromtimestamp(incident["starts_at_ms"] / 1000, WARSAW)
+            .date()
+            .isoformat()
+        )
+        request = (
+            connection.execute(
+                text(
+                    "SELECT * FROM schedule_refresh_requests "
+                    "WHERE cinema_id=:cinema AND target_date=:day"
+                ),
+                {"cinema": incident["cinema_id"], "day": day},
+            )
+            .mappings()
+            .first()
+        )
+        incident["verification_pending"] = bool(
+            incident["last_outcome"] == "screening_missing"
+            and set(incident["failed_outcomes"]) == {"screening_missing"}
+            and not incident["schedule_changed"]
+            and not incident["recovery"]
+            and request
+            and request["state"] in {"pending", "running"}
+            and request["requested_ms"] >= incident["first_failure_ms"]
+            and now - incident["first_failure_ms"] < 15 * 60_000
+        )
+        if incident["last_outcome"] == "screening_missing" and request:
+            incident["verification_outcome"] = (
+                "Fresh repertoire still lists this booking"
+                if request["outcome"] == "accepted" and not incident["schedule_changed"]
+                else request["outcome"] or request["state"]
+            )
     return result
 
 
@@ -104,6 +150,10 @@ def incident_message(incident: dict[str, Any]) -> str:
         "Latest attempt: " + local_time(incident["last_failure_ms"]),
     ]
     details = json.loads(incident.get("last_diagnostics_json") or "{}")
+    if details.get("booking_url"):
+        lines.append("Booking: " + str(details["booking_url"]))
+    if incident.get("verification_outcome"):
+        lines.append("Schedule verification: " + str(incident["verification_outcome"]))
     reasons = {
         "Seat counts disagree": (
             "Published seat counts do not agree with the selectable "

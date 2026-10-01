@@ -249,6 +249,9 @@ async def collect(
                 raw = data.model_dump_json().encode()
                 stored = store_snapshot(connection, data, raw, "Europe/Warsaw")
                 snapshot_id = stored["snapshot_id"]
+                from .schedule_changes import reconcile
+
+                reconcile(connection, run_id, str(snapshot_id), now_ms())
             connection.execute(
                 text(
                     "UPDATE fetch_runs SET status=:status, finished_at_ms=:finished, "

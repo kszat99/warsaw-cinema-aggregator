@@ -594,3 +594,22 @@ or request concurrency. No claim of eliminating all future misses.
 Regular planner remains one owner with unchanged-snapshot skip and ten-minute horizon
 refresh. Threads perform network work outside short SQLite claim/finish transactions.
 Health and alerts continue tracking missed slots, actual attempts and provider cooldowns.
+
+
+## Schedule changes and missing booking verification
+
+Accepted, published cinema/date refreshes retire pending jobs absent from that scope.
+Empty/unconfirmed or count-drop-quarantined responses retain the prior schedule and
+jobs. Invalid booking identities prevent destructive reconciliation for that scope.
+Exact booking/start identities are compared; historical counts are not merged into a
+replacement showing. schedule_removals stores the confirming run and verification time.
+
+Cinema City PRESENTATION_NOT_FOUND queues a durable cinema/date refresh request.
+The worker performs it in a separate thread, sharing the regular refresh flock;
+requests deduplicate by cinema/date and targeted refreshes have global 15-minute
+minimum spacing and respect provider cooldown. Restarted requests recover after a
+five-minute lease. A missing-only incident has at most 15 minutes verification grace.
+If accepted fresh data still lists the broken booking, verification fails, or grace
+expires, the alert shows provider error code and booking URL. Confirmed removal
+resolves the alert as schedule_changed without claiming a successful seat count.
+Health labels SCHEDULE CHANGED or VERIFYING SCHEDULE and retains original attempts.

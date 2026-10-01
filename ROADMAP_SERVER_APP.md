@@ -6,6 +6,21 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1 schedule-change handling (schema 0010_schedule_changes): published accepted
+cinema/date scopes reconcile pending seat jobs against exact booking identity/start.
+Removed jobs are superseded; existing observations remain. Audit records reference
+confirming fetch run/time. Empty, failed, quarantined or invalid-identity scopes do
+not cancel jobs. Replacement bookings are new identities, not merged histories.
+Cinema City PRESENTATION_NOT_FOUND is screening_missing with bounded provider code
+and booking URL diagnostics, not a misleading HTTP-200 upstream error.
+Durable deduplicated cinema/date verification requests run off-thread with the regular
+refresh flock, provider cooldown and global 15-minute minimum targeted spacing.
+Only missing-booking incidents get up to 15 minutes verification grace; accepted
+refresh still listing the booking, failed verification, or grace expiry remains
+alertable. Confirmed removal resolves as schedule_changed without fictitious seat
+recovery. Worker dispatch continues while verification runs. Deployment pending.
+
+
 October 1 cutoff policy update: routine T0/T+5 removed for Wisła, Atlantic and
 Amondo. Historical checks unchanged. Final offsets: Wisła/Amondo T-5 and T-2;
 Atlantic T-5 (T-2 not yet validated); Cinema City and Kinoteka unchanged.

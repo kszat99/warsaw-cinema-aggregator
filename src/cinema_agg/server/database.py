@@ -10,7 +10,7 @@ from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
-SCHEMA_REVISION = "0009_refresh_failure"
+SCHEMA_REVISION = "0010_schedule_changes"
 BUSY_TIMEOUT_MS = 5000
 
 
@@ -99,6 +99,14 @@ def require_schema(connection: Connection) -> None:
     )
     if versions != [SCHEMA_REVISION]:
         raise SchemaUnavailable("Database schema does not match this application.")
+    connection.execute(
+        text("SELECT job_id,run_id,verified_ms FROM schedule_removals LIMIT 0")
+    )
+    connection.execute(
+        text(
+            "SELECT cinema_id,target_date,state FROM schedule_refresh_requests LIMIT 0"
+        )
+    )
     connection.execute(text("SELECT id, status, snapshot_id FROM fetch_runs LIMIT 0"))
     connection.execute(
         text(

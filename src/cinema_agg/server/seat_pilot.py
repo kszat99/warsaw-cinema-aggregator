@@ -566,6 +566,13 @@ def finish(
         )
         if not updated.rowcount:
             return False
+        if (
+            result["outcome"] == "screening_missing"
+            and current["purpose"] == "scheduled"
+        ):
+            from .schedule_changes import request_verification
+
+            request_verification(connection, current, now)
         connection.execute(
             text(
                 "UPDATE seat_observations SET finished_at_ms=:now,outcome=:outcome,"
@@ -758,13 +765,34 @@ def main() -> None:
             return
         # One task per group; each owns its HTTP client. SQLite claim enforces the
         # group lease too, so a second process cannot duplicate active requests.
-        with ThreadPoolExecutor(max_workers=len(DISPATCH_GROUPS)) as pool:
+        with ThreadPoolExecutor(max_workers=len(DISPATCH_GROUPS) + 1) as pool:
             active: dict[str, Future[dict[str, Any]]] = {}
+            refresh_future: Future[bool] | None = None
+            last_verification_poll = 0
             while not stop.is_set():
                 for group in list(active):
                     if active[group].done():
                         active.pop(group).result()
                 now = clock_ms()
+                if refresh_future is not None and refresh_future.done():
+                    try:
+                        refresh_future.result()
+                    except Exception as error:
+                        print(
+                            json.dumps(
+                                {
+                                    "event": "schedule_verification_failed",
+                                    "error_type": type(error).__name__,
+                                }
+                            ),
+                            flush=True,
+                        )
+                    refresh_future = None
+                if refresh_future is None and now - last_verification_poll >= MINUTE:
+                    from .schedule_changes import verify_next
+
+                    refresh_future = pool.submit(verify_next, path, now)
+                    last_verification_poll = now
                 if now - last_plan >= MINUTE:
                     snapshot = latest_snapshot_id(engine)
                     if snapshot != last_snapshot or now - last_full_plan >= 10 * MINUTE:

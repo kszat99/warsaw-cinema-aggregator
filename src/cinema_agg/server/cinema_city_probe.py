@@ -86,9 +86,21 @@ def probe(client: httpx.Client, booking: str) -> dict[str, Any]:
             error = data["error"]
             code = error.get("error") if isinstance(error, dict) else None
             return {
-                "outcome": "closed" if code == "TICKETING_ENDED" else "upstream_error",
+                "outcome": (
+                    "closed"
+                    if code == "TICKETING_ENDED"
+                    else "screening_missing"
+                    if code == "PRESENTATION_NOT_FOUND"
+                    else "upstream_error"
+                ),
                 "step": step,
                 "http_status": response.status_code,
+                "diagnostics": {
+                    "phase": step,
+                    "reason": "Booking API reports " + str(code)[:100],
+                    "provider_code": str(code)[:100],
+                    "booking_url": f"{ORIGIN}/order/{event}?lang=pl",
+                },
             }
         presentation = data["presentation"]
         if type(presentation.get("id")) is not int or str(presentation["id"]) != event:

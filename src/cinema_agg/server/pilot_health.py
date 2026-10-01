@@ -212,6 +212,13 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
     }
     for attempt_row in attempts:
         for incident in seat_incidents:
+            if attempt_row["attempt_id"] in incident["failed_attempt_ids"]:
+                attempt_row["schedule_changed"] = incident.get(
+                    "schedule_changed", False
+                )
+                attempt_row["verification_pending"] = incident.get(
+                    "verification_pending", False
+                )
             if (
                 incident.get("expected_cutoff")
                 and attempt_row["attempt_id"] in incident["failed_attempt_ids"]
@@ -263,7 +270,13 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         or now - heartbeat["attempted_ms"] > 25 * MINUTE
     ):
         issues.append("external_heartbeat_failed_or_stale")
-    if any(not i["recovery"] and not i.get("expected_cutoff") for i in seat_incidents):
+    if any(
+        not i["recovery"]
+        and not i.get("expected_cutoff")
+        and not i.get("schedule_changed")
+        and not i.get("verification_pending")
+        for i in seat_incidents
+    ):
         issues.append("seat_incident_open")
     if notifications:
         issues.append("notification_delivery_pending")
@@ -291,7 +304,14 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
         if k
         not in {"success", "running", "closed", "sales_unavailable", "listing_absent"}
     }
-    if failures:
+    unresolved_missing = any(
+        a["outcome"] == "screening_missing"
+        and not a.get("schedule_changed")
+        and not a.get("verification_pending")
+        for a in attempts
+    )
+    failures.pop("screening_missing", None)
+    if failures or unresolved_missing:
         issues.append("seat_errors_in_window")
     missed = sum(j["state"] == "missed" for j in eligible)
     if missed:
@@ -483,7 +503,16 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             lines.append(
                 "    Retry not scheduled: insufficient time or attempt not eligible."
             )
-        if job.get("expected_cutoff"):
+        if job.get("schedule_changed"):
+            lines.append(
+                "    SCHEDULE CHANGED: trusted refresh confirmed removal; "
+                "alert resolved."
+            )
+        elif job.get("verification_pending"):
+            lines.append(
+                "    VERIFYING SCHEDULE: booking not found; targeted refresh queued."
+            )
+        elif job.get("expected_cutoff"):
             lines.append(
                 "    EXPECTED CUTOFF: retired from alerts; prior pre-start counts "
                 "were obtained. No later seat recovery is claimed."
@@ -731,10 +760,25 @@ def render(data: dict[str, Any]) -> str:
     active_incidents = [
         i
         for i in data.get("seat_incidents", [])
-        if not i["recovery"] and not i.get("expected_cutoff")
+        if not i["recovery"]
+        and not i.get("expected_cutoff")
+        and not i.get("schedule_changed")
+        and not i.get("verification_pending")
     ]
     lines.append(f"  Active screening incidents: {len(active_incidents)}")
     for incident in data.get("seat_incidents", []):
+        if incident.get("schedule_changed") or incident.get("verification_pending"):
+            label = (
+                "SCHEDULE CHANGED (alert resolved)"
+                if incident.get("schedule_changed")
+                else "VERIFYING SCHEDULE"
+            )
+            lines.append(
+                f"  {label}: {cinema_name(incident['cinema_id'])} | "
+                f"{safe_label(incident['title'])} | "
+                f"screening {local_time(incident['starts_at_ms'])}"
+            )
+            continue
         if incident.get("expected_cutoff"):
             prior = incident["last_prestart_success"]
             lines.append(
