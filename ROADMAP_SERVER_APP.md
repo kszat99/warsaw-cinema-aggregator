@@ -899,3 +899,10 @@ detailed response evidence was saved. Full bounded sanitized page text remains i
 SQLite, not Telegram; raw HTML/session form state is not archived. Existing alert
 deduplication and recovery rules stay unchanged. Wisła's next Lalka 14:30 check is
 scheduled around 12:30 Warsaw; no additional polling loop is enabled.
+
+
+Alert update deployment: b620b55 installed on VPS; worker and alert timer active.
+Rendered an existing stored Lalka incident with the installed package to verify
+that Cause is included and historical missing evidence is explicit. No duplicate
+test alert was sent. Local suite 193 passed; focused diagnostic/alert tests, strict
+lint, mypy and source secret scan passed. Follow scheduled Wisła checks this afternoon.
