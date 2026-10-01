@@ -581,9 +581,20 @@ def refresh_explanation(data: dict[str, Any]) -> list[str]:
         "Schedule refresh = updating movie times, not checking seats.",
         f"Latest run: {latest.get('status', 'missing')} at "
         + local_time(latest.get("finished_at_ms")),
-        f"Accepted cinema/date updates: {accepted}/{len(scopes)}.",
+        f"Recorded cinema/date outcomes: {len(scopes)}/"
+        f"{latest.get('planned_scopes') or 'unknown planned total'}; "
+        f"accepted: {accepted}/{len(scopes)} recorded outcomes.",
+        "Published snapshot: "
+        + ("yes" if latest.get("snapshot_id") else "no; previous schedules retained"),
         "Last fully successful run: " + local_time(refresh.get("last_success_at_ms")),
     ]
+    if latest.get("error_type"):
+        lines.append(
+            "Interruption cause: "
+            + safe_label(latest["error_type"])
+            + " | phase: "
+            + safe_label(latest.get("failure_phase"))
+        )
     age_minutes = refresh.get("last_success_age_minutes")
     if age_minutes is not None:
         lines.append(f"Age: {age_minutes:.0f} minutes; warning threshold: 420 minutes.")

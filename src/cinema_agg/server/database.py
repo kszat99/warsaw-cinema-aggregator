@@ -1,14 +1,16 @@
 """Explicit migrations and short SQLite transactions; API connections are read-only."""
 
+import logging
 import sqlite3
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Connection, Engine, create_engine, event, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import NullPool
 
-SCHEMA_REVISION = "0008_seat_diagnostics"
+SCHEMA_REVISION = "0009_refresh_failure"
 
 
 class SchemaUnavailable(Exception):
@@ -41,7 +43,23 @@ def database_engine(path: Path, *, readonly: bool, create: bool = False) -> Engi
     @event.listens_for(engine, "begin")
     def begin(connection: Connection) -> None:
         # Explicit transactions also cover SELECTs/DDL on Python's legacy sqlite driver.
-        connection.exec_driver_sql("BEGIN" if readonly else "BEGIN IMMEDIATE")
+        for attempt in range(3):
+            try:
+                connection.exec_driver_sql("BEGIN" if readonly else "BEGIN IMMEDIATE")
+                return
+            except OperationalError as exc:
+                code = getattr(exc.orig, "sqlite_errorcode", None)
+                if (
+                    readonly
+                    or code is None
+                    or code & 255 != sqlite3.SQLITE_BUSY
+                    or attempt == 2
+                ):
+                    raise
+                # Retry acquisition only, before any transactional work occurs.
+                logging.getLogger(__name__).warning(
+                    "database_write_lock_wait retry=%s max_retries=2", attempt + 1
+                )
 
     return engine
 

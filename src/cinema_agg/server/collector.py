@@ -6,6 +6,7 @@ import contextlib
 import importlib
 import io
 import json
+import sqlite3
 import sys
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime, timedelta
@@ -17,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 
 from .contracts import LegacyScreening, LegacySnapshot, utc_datetime, utc_milliseconds
 from .database import SchemaUnavailable, database_engine, require_schema
@@ -105,6 +106,7 @@ async def collect(
     reader = database_engine(path, readonly=True)
     run_id = uuid4().hex
     started = False
+    phase = "initialization"
     try:
         baseline = screenings_page(reader, limit=50000, offset=0)
         base_id = baseline.snapshot.id if baseline.snapshot else None
@@ -116,10 +118,14 @@ async def collect(
             require_schema(connection)
             connection.execute(
                 text(
-                    "INSERT INTO fetch_runs (id, started_at_ms, status) "
-                    "VALUES (:id, :started, 'running')"
+                    "INSERT INTO fetch_runs (id, started_at_ms, status,planned_scopes) "
+                    "VALUES (:id, :started, 'running',:planned)"
                 ),
-                {"id": run_id, "started": now_ms()},
+                {
+                    "id": run_id,
+                    "started": now_ms(),
+                    "planned": len(cinema_ids) * len(dates),
+                },
             )
         started = True
         accepted = 0
@@ -201,6 +207,7 @@ async def collect(
                     "error_type": error_type,
                     "observed_at_ms": now_ms(),
                 }
+                phase = "record_scope"
                 with engine.begin() as connection:
                     connection.execute(
                         text(
@@ -222,6 +229,7 @@ async def collect(
             if accepted == attempted
             else ("partial" if accepted else "failed")
         )
+        phase = "publish_snapshot"
         snapshot_id = None
         with engine.begin() as connection:
             state = connection.execute(
@@ -260,16 +268,32 @@ async def collect(
             "attempted_scopes": attempted,
             "snapshot_id": snapshot_id,
         }
-    except BaseException:
+    except BaseException as exc:
+        code = getattr(getattr(exc, "orig", None), "sqlite_errorcode", None)
+        error_type = (
+            "database_busy"
+            if (
+                isinstance(exc, OperationalError)
+                and code is not None
+                and code & 255 == sqlite3.SQLITE_BUSY
+            )
+            else type(exc).__name__
+        )
         if started:
             with engine.begin() as connection:
                 connection.execute(
                     text(
                         "UPDATE fetch_runs SET status='interrupted', "
-                        "finished_at_ms=:finished "
+                        "finished_at_ms=:finished,error_type=:error, "
+                        "failure_phase=:phase "
                         "WHERE id=:id AND status='running'"
                     ),
-                    {"id": run_id, "finished": now_ms()},
+                    {
+                        "id": run_id,
+                        "finished": now_ms(),
+                        "error": error_type,
+                        "phase": phase,
+                    },
                 )
         raise
     finally:

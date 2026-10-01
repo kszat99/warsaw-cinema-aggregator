@@ -517,3 +517,25 @@ No seat controls are posted. VPS read-only test of past Lalka 47590 reached
 Message.aspx with explicit sales unavailable, rather than stopping at repertoire
 absence. Wisła Tedi 114826 likewise explicitly reports sales unavailable. These
 current tests validate classification, not retrospective closure timestamps.
+
+
+## October 1: SQLite write contention and refresh interruption
+
+14:16 refresh failed acquiring BEGIN IMMEDIATE with SQLITE_BUSY after seven scope
+results. The actual competing holder is not identified in logs. Copied VPS DB plan
+benchmark: 4.355s for 8,633 jobs; health report 0.112s. Worker CPU quota can extend
+planning wall time beyond the original five-second wait. Avoid claiming a proven
+holder; redundant planning is a measured contention contributor.
+
+Worker polls latest import ID via autocommit read every minute, rebuilding only
+when it changes or after ten minutes (to extend moving horizon). Pending job dispatch
+still runs continuously; stable jobs and timings unchanged. SQLite write acquisition
+retries SQLITE_BUSY twice, each with existing five-second wait (15 seconds maximum).
+Only BEGIN acquisition is retried, before mutations; whole transactions are never
+blindly replayed. Non-busy database errors surface immediately. This is bounded lock
+waiting, not a new message broker; one writer already serializes SQLite transactions.
+Schema 0009_refresh_failure stores planned scope count, safe error type and failed
+phase on interrupted runs. Alerts distinguish recorded scopes from planned total,
+state whether a snapshot was published, and show database_busy when captured.
+Historical runs retain unknown totals/causes; no guessed historical fields added.
+A persistent blocker still fails visibly; this does not promise zero future errors.

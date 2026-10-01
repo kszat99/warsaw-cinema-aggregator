@@ -40,6 +40,20 @@ def clock_ms() -> int:
     return int(datetime.now(UTC).timestamp() * 1000)
 
 
+def latest_snapshot_id(engine: Engine) -> str | None:
+    # DB-API autocommit SELECT avoids SQLAlchemy's writer BEGIN IMMEDIATE hook.
+    connection = engine.raw_connection()
+    try:
+        row = (
+            connection.cursor()
+            .execute("SELECT id FROM imports ORDER BY generated_at_ms DESC LIMIT 1")
+            .fetchone()
+        )
+        return str(row[0]) if row else None
+    finally:
+        connection.close()
+
+
 def booking_identity(url: str) -> tuple[str, str]:
     parts = urlsplit(url)
     if parts.scheme != "https" or parts.netloc != "bilety.kinoteka.pl":
@@ -644,11 +658,17 @@ def main() -> None:
         diagnostic = args.command == "probe-next"
         plan(engine, clock_ms(), diagnostic=diagnostic, cinema_id=args.cinema)
         last_plan = clock_ms()
+        last_snapshot = latest_snapshot_id(engine)
+        last_full_plan = last_plan
         with httpx.Client(timeout=20, follow_redirects=False) as client:
             while not stop.is_set():
                 now = clock_ms()
                 if not diagnostic and now - last_plan >= MINUTE:
-                    plan(engine, now)
+                    snapshot = latest_snapshot_id(engine)
+                    if snapshot != last_snapshot or now - last_full_plan >= 10 * MINUTE:
+                        plan(engine, now)
+                        last_snapshot = snapshot
+                        last_full_plan = now
                     last_plan = now
                 job = claim(engine, now, diagnostic_only=diagnostic)
                 if job:

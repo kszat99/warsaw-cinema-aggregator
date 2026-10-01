@@ -58,3 +58,18 @@ def test_legacy_and_recovery_messages_are_truthful():
     message = format_resolved_message("schedule_refresh_stale", data)
     assert "Latest run: complete" in message
     assert "historical" not in message
+
+
+def test_interrupted_refresh_shows_planned_total_and_database_cause():
+    data = evidence()
+    data["refresh"]["latest"].update(
+        status="interrupted",
+        planned_scopes=20,
+        error_type="database_busy",
+        failure_phase="record_scope",
+        snapshot_id=None,
+    )
+    message = format_alert_message("latest_refresh_failed_or_partial", data)
+    assert "Recorded cinema/date outcomes: 2/20" in message
+    assert "database_busy | phase: record_scope" in message
+    assert "no; previous schedules retained" in message
