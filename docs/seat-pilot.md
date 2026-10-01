@@ -454,3 +454,13 @@ detailed response evidence was saved. Full bounded sanitized page text remains i
 SQLite, not Telegram; raw HTML/session form state is not archived. Existing alert
 deduplication and recovery rules stay unchanged. Wisła's next Lalka 14:30 check is
 scheduled around 12:30 Warsaw; no additional polling loop is enabled.
+
+
+October 1: restore Wisła T0 and T+5 observations alongside T-5/T-2 and historical
+checks. The Lalka mismatch disproves treating every invalid_data as sales cutoff;
+actual closure timing still needs evidence. Future unattempted superseded T0/T+5
+jobs for current screening identities are reactivated idempotently; past slots and
+attempted/finished history are not rewritten. Strict pre-showtime deadline applies
+only to T-2, not the restored checks. Existing serial pacing, request limits and
+failure/recovery alerts apply, with sanitized failure text retained. Late purchasing
+is a hypothesis to evaluate from observations, not an established fact.

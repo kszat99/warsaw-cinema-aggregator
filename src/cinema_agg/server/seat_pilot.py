@@ -68,14 +68,6 @@ def plan(
     inserted = 0
     with engine.begin() as connection:
         require_schema(connection)
-        # Retire only unattempted obsolete timings; preserve attempts and history.
-        connection.execute(
-            text(
-                "UPDATE seat_jobs SET state='superseded' WHERE provider='msi_wisla' "
-                "AND purpose='scheduled' AND offset_minutes IN (0,5) "
-                "AND state='pending' AND retry_at_ms IS NULL"
-            )
-        )
         rows = (
             connection.execute(
                 text(
@@ -196,7 +188,15 @@ def plan(
                         ":purpose, "
                         ":due, :deadline, :state) ON CONFLICT(id) DO UPDATE SET "
                         "source_observed_ms=excluded.source_observed_ms, "
-                        "title=excluded.title, deadline_ms=CASE "
+                        "title=excluded.title, state=CASE "
+                        "WHEN seat_jobs.state='superseded' "
+                        "AND seat_jobs.provider='msi_wisla' "
+                        "AND seat_jobs.purpose='scheduled' "
+                        "AND seat_jobs.offset_minutes IN (0,5) "
+                        "AND excluded.due_at_ms>=:now "
+                        "AND NOT EXISTS (SELECT 1 FROM seat_observations o "
+                        "WHERE o.job_id=seat_jobs.id) THEN 'pending' "
+                        "ELSE seat_jobs.state END, deadline_ms=CASE "
                         "WHEN seat_jobs.state='pending' "
                         "AND seat_jobs.purpose='scheduled' "
                         "AND seat_jobs.offset_minutes<=-15 THEN excluded.deadline_ms "
@@ -204,6 +204,7 @@ def plan(
                     ),
                     {
                         "id": job_id,
+                        "now": now,
                         "provider": provider,
                         "catalog": row["cinema_id"],
                         "event": event_id,

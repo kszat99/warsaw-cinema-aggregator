@@ -20,7 +20,7 @@ HISTORY_OFFSETS = (-1440, -720, -360, -180, -120, -60, -30, -15)
 OFFSETS = {
     "kinoteka": (*HISTORY_OFFSETS, -5, 0, 5, 40),
     "cinema_city": (*HISTORY_OFFSETS, -5, 0, 5, 10),
-    "msi_wisla": (*HISTORY_OFFSETS, -5, -2),
+    "msi_wisla": (*HISTORY_OFFSETS, -5, -2, 0, 5),
 }
 NAMES = {
     "kinoteka": "Kinoteka",

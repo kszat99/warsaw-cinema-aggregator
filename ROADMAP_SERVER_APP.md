@@ -906,3 +906,13 @@ Rendered an existing stored Lalka incident with the installed package to verify
 that Cause is included and historical missing evidence is explicit. No duplicate
 test alert was sent. Local suite 193 passed; focused diagnostic/alert tests, strict
 lint, mypy and source secret scan passed. Follow scheduled Wisła checks this afternoon.
+
+
+October 1: restore Wisła T0 and T+5 observations alongside T-5/T-2 and historical
+checks. The Lalka mismatch disproves treating every invalid_data as sales cutoff;
+actual closure timing still needs evidence. Future unattempted superseded T0/T+5
+jobs for current screening identities are reactivated idempotently; past slots and
+attempted/finished history are not rewritten. Strict pre-showtime deadline applies
+only to T-2, not the restored checks. Existing serial pacing, request limits and
+failure/recovery alerts apply, with sanitized failure text retained. Late purchasing
+is a hypothesis to evaluate from observations, not an established fact.
