@@ -889,3 +889,13 @@ active. Labelled diagnostic job 3f406b9b0f704d379ee999a56935d722 for Wisła Lalk
 completed successfully, saved 483 available /16 unavailable /499 and persisted the
 482-control discrepancy in diagnostics_json. Zero overdue jobs after verification.
 Local full suite: 191 passed; strict lint, mypy and source secret scan passed.
+
+
+October 1 follow-up: screening failure/recovery Telegram messages now include the
+last failure's specific cause, failed phase, HTTP status, returned page path and
+selectable-control count when available. An explicit MSI sales-unavailable message
+is surfaced without assuming it means sold out. Old attempts clearly state that no
+detailed response evidence was saved. Full bounded sanitized page text remains in
+SQLite, not Telegram; raw HTML/session form state is not archived. Existing alert
+deduplication and recovery rules stay unchanged. Wisła's next Lalka 14:30 check is
+scheduled around 12:30 Warsaw; no additional polling loop is enabled.

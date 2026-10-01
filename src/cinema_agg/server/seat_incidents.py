@@ -1,5 +1,6 @@
 """Derive screening-specific failure episodes without discarding observations."""
 
+import json
 from typing import Any
 
 from sqlalchemy import Connection, text
@@ -14,7 +15,8 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
             "j.cinema_event,j.starts_at_ms,j.title,"
             "j.id AS job_id,j.offset_minutes,"
             "o.id,o.attempted_at_ms,o.finished_at_ms,o.outcome,o.available,"
-            "o.unavailable,o.capacity FROM seat_observations o "
+            "o.unavailable,o.capacity,o.http_status,o.diagnostics_json "
+            "FROM seat_observations o "
             "JOIN seat_jobs j ON j.id=o.job_id WHERE j.purpose='scheduled' "
             "AND o.outcome!='running' AND o.attempted_at_ms<=:now "
             "ORDER BY o.attempted_at_ms,o.id"
@@ -59,6 +61,8 @@ def incidents(connection: Connection, now: int) -> list[dict[str, Any]]:
         active[key]["failed_job_ids"].append(row["job_id"])
         active[key]["last_failure_ms"] = row["attempted_at_ms"]
         active[key]["last_outcome"] = row["outcome"]
+        active[key]["last_http_status"] = row["http_status"]
+        active[key]["last_diagnostics_json"] = row["diagnostics_json"]
     return result
 
 
@@ -75,6 +79,75 @@ def incident_message(incident: dict[str, Any]) -> str:
         "First failed attempt: " + local_time(incident["first_failure_ms"]),
         f"Failed attempts: {incident['failures']} | {incident['last_outcome']}",
     ]
+    details = json.loads(incident.get("last_diagnostics_json") or "{}")
+    reasons = {
+        "Seat counts disagree": (
+            "Published seat counts do not agree with the selectable "
+            "map or its capacity."
+        ),
+        "Missing capacity markers": (
+            "The returned page did not contain the expected "
+            "availability/capacity labels."
+        ),
+        "Session handshake unavailable": (
+            "The returned page lacked the session fields needed to open the seat map."
+        ),
+        "Seat page unavailable; closure not established": (
+            "The response was not the expected seat-map page."
+        ),
+        "Unapproved redirect": (
+            "Booking redirected outside the approved cinema endpoint; stopped."
+        ),
+        "Redirect limit": "Booking exceeded the permitted redirect count; stopped.",
+    }
+    fallback = {
+        "network_error": (
+            "A network connection failed; no valid seat count was obtained."
+        ),
+        "timeout": "The cinema did not respond within the request time limit.",
+        "blocked": "The cinema returned an access block or rate limit.",
+        "tls_error": "The HTTPS connection could not be verified.",
+        "deadline_exceeded": "The observation reached its cutoff before completion.",
+        "invalid_data": (
+            "The response could not be validated. This older "
+            "attempt has no detailed response evidence."
+        ),
+    }
+    reason = str(details.get("reason", ""))
+    lines.append(
+        "Cause: "
+        + reasons.get(
+            reason,
+            reason
+            or fallback.get(
+                incident["last_outcome"],
+                "The request failed; no valid seat count was obtained.",
+            ),
+        )
+    )
+    page = str(details.get("response_text", ""))
+    if "Sprzedaż biletów dla wybranego wydarzenia jest niedostępna" in page:
+        lines.append(
+            "Page says: ticket sales for this event are unavailable. Sold-out "
+            "versus sales cutoff is not established."
+        )
+    if details:
+        lines.append("Failed step: " + safe_label(str(details.get("phase", "unknown"))))
+        if details.get("path"):
+            lines.append("Returned page: " + safe_label(str(details["path"])))
+        if details.get("available_controls") is not None:
+            lines.append(
+                f"Selectable controls in response: {details['available_controls']}"
+            )
+        if details.get("published_available") is not None:
+            lines.append(
+                f"Published availability: {details['published_available']} / "
+                f"{details.get('published_capacity', 'unknown')} capacity"
+            )
+        if details.get("response_text") is not None:
+            lines.append("Sanitized response text saved in SQLite for investigation.")
+    if incident.get("last_http_status") is not None:
+        lines.append(f"HTTP: {incident['last_http_status']}")
     if recovery:
         lines.extend(
             [

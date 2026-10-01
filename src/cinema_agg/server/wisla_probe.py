@@ -226,6 +226,13 @@ def probe(
                 response_bytes=len(last_response.content),
                 available_controls=available_controls,
             )
+            for key, pattern in (
+                ("published_available", r"Dostępnych\s+miejsc\s*:\s*(\d+)"),
+                ("published_capacity", r"Miejsc\s+łącznie\s*:\s*(\d+)"),
+            ):
+                marker = re.search(pattern, visible, re.I)
+                if marker:
+                    details[key] = int(marker[1])
             result["http_status"] = result["http_status"] or last_response.status_code
         client.cookies.clear()
     return result

@@ -444,3 +444,13 @@ Retention follows observation history for now; response captures are bounded per
 At 11:47 Warsaw, Cinema City scheduled coverage was Arkadia 319/319, Bemowo 21/21,
 Sadyba IMAX 1/1, Mokotów 16/16, Promenada 22/22, Północna 23/23 and Janki 18/18,
 with no missed checks. New venues still require sustained observation.
+
+
+October 1 follow-up: screening failure/recovery Telegram messages now include the
+last failure's specific cause, failed phase, HTTP status, returned page path and
+selectable-control count when available. An explicit MSI sales-unavailable message
+is surfaced without assuming it means sold out. Old attempts clearly state that no
+detailed response evidence was saved. Full bounded sanitized page text remains in
+SQLite, not Telegram; raw HTML/session form state is not archived. Existing alert
+deduplication and recovery rules stay unchanged. Wisła's next Lalka 14:30 check is
+scheduled around 12:30 Warsaw; no additional polling loop is enabled.
