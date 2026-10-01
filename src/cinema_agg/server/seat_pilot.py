@@ -18,6 +18,8 @@ from uuid import UUID, uuid4
 import httpx
 from sqlalchemy import Engine, bindparam, text
 
+from .amondo_probe import booking_identity as amondo_identity
+from .amondo_probe import probe as amondo_probe
 from .cinema_city_probe import presentation_id
 from .cinema_city_probe import probe as city_probe
 from .database import database_engine, require_schema
@@ -75,6 +77,8 @@ def job_identity(cinema_id: str, url: str) -> tuple[str, str]:
         )
     if cinema_id in CITY_CINEMAS:
         return cinema_id, presentation_id(url)
+    if cinema_id == "amondo":
+        return amondo_identity(url)
     if cinema_id == "kinoteka":
         return booking_identity(url)
     raise ValueError("Cinema not enabled")
@@ -295,11 +299,13 @@ def claim(
                 "AND retry_at_ms IS NOT NULL AND deadline_ms < :now + "
                 "CASE provider WHEN 'cinema_city' THEN :city "
                 "WHEN 'msi_wisla' THEN :wisla "
-                "WHEN 'msi_atlantic' THEN :wisla ELSE :kinoteka END"
+                "WHEN 'msi_atlantic' THEN :wisla "
+                "WHEN 'amondo' THEN :amondo ELSE :kinoteka END"
             ),
             {
                 "now": now,
                 "city": RETRY_BUDGET_MS["cinema_city"],
+                "amondo": RETRY_BUDGET_MS["amondo"],
                 "wisla": RETRY_BUDGET_MS["msi_wisla"],
                 "kinoteka": RETRY_BUDGET_MS["kinoteka"],
             },
@@ -383,6 +389,11 @@ def claim(
 
 
 def probe(client: httpx.Client, job: Mapping[str, Any]) -> dict[str, Any]:
+    if job.get("provider") == "amondo":
+        if job.get("cinema_id") != "amondo" or job["provider_cinema"] != "1772":
+            raise ValueError("Invalid Amondo cinema")
+        return amondo_probe(client, str(job["cinema_event"]), job["starts_at_ms"])
+
     if job.get("provider") in {"msi_wisla", "msi_atlantic"}:
         venue = "wisla" if job["provider"] == "msi_wisla" else "atlantic"
         if job.get("cinema_id") != venue or job["provider_cinema"] != venue:

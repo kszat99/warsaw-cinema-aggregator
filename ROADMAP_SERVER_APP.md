@@ -6,6 +6,15 @@ This is the working plan for a maintainable server application and an L2/support
 
 ## Resume here
 
+October 1 Amondo integration: dedicated independently paced provider queue;
+read-only repertoire, salesInfo and seat-layout requests. Exact organizer/show/start
+matching prevents selecting a different screening. Historical offsets plus T-5,
+T-2, T0 and T+5 remain experimental; provider sales stop/status and event ID are
+stored in bounded diagnostics. Missing listing is not proof of cutoff or sold out.
+No layout-capacity fallback from available-seat count. Existing retries, SQLite,
+health and failure/recovery alerts apply. Deployment verification pending.
+
+
 October 1 transient HTTP retry: HTTP 500/502/503/504 now qualify for the existing
 single delayed retry (30 seconds), only for scheduled checks with enough request
 budget inside the original deadline. Provider pacing and cooldowns still apply.

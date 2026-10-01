@@ -15,6 +15,7 @@ PROVIDERS = {
     "kinoteka": "kinoteka",
     "wisla": "msi_wisla",
     "atlantic": "msi_atlantic",
+    "amondo": "amondo",
     **dict.fromkeys(CITY_CINEMAS, "cinema_city"),
 }
 HISTORY_OFFSETS = (-1440, -720, -360, -180, -120, -60, -30, -15)
@@ -23,12 +24,14 @@ OFFSETS = {
     "cinema_city": (*HISTORY_OFFSETS, -5, 0, 5, 10),
     "msi_wisla": (*HISTORY_OFFSETS, -5, -2, 0, 5),
     "msi_atlantic": (*HISTORY_OFFSETS, -5, 0, 5),
+    "amondo": (*HISTORY_OFFSETS, -5, -2, 0, 5),
 }
 NAMES = {
     "kinoteka": "Kinoteka",
     **CITY_CINEMAS,
     "wisla": "Novekino Wisła",
     "atlantic": "Novekino Atlantic",
+    "amondo": "Kino Amondo",
 }
 RETRY_DELAY_MS = 30_000
 # Kinoteka/City reserve their request budgets. Wisla's 120s reserve prevents
@@ -38,6 +41,7 @@ RETRY_BUDGET_MS = {
     "cinema_city": 60_000,
     "msi_wisla": 120_000,
     "msi_atlantic": 120_000,
+    "amondo": 60_000,
 }
 
 
@@ -61,5 +65,6 @@ DISPATCH_GROUPS = {
     "cinema_city": ("cinema_city",),
     "kinoteka": ("kinoteka",),
     "novekino": ("msi_wisla", "msi_atlantic"),
+    "amondo": ("amondo",),
 }
 PROVIDER_SPACING_MS = 5000
