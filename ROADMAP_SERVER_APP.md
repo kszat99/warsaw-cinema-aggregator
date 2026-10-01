@@ -21,7 +21,10 @@ alertable. Confirmed removal resolves as schedule_changed without fictitious sea
 recovery. Other providers continue while verification reserves Cinema City dispatch capacity.
 Live schema migration backed up and verified. Original Mokotów booking 1721575
 confirmed absent by accepted targeted refresh; 11 pending jobs superseded, failed
-attempt retained, replacement 1731203 planned independently. Final dispatch verification pending.
+attempt retained, replacement 1731203 planned independently. Deployed 525f20e; original alert resolved as schedule_changed, zero old pending
+checks and 12 replacement scheduled checks verified. Worker heartbeat healthy,
+no overdue jobs, SQLite quick_check OK. 245 tests, lint, types and source secret
+scan pass. Backup: backup-pre-schedule-changes-20261001.sqlite3.
 
 
 October 1 cutoff policy update: routine T0/T+5 removed for Wisła, Atlantic and
