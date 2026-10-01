@@ -986,3 +986,11 @@ No seat controls are posted. VPS read-only test of past Lalka 47590 reached
 Message.aspx with explicit sales unavailable, rather than stopping at repertoire
 absence. Wisła Tedi 114826 likewise explicitly reports sales unavailable. These
 current tests validate classification, not retrospective closure timestamps.
+
+
+Deployment 917fb36 installed and verified: worker and alert timer active, installed
+health report renders successfully, and availability notice preview contains
+SEAT AVAILABILITY UNAVAILABLE, T+5 offset and explicit provider message without
+irrelevant zero control count. Preview was rendered locally on VPS, not sent as a
+fabricated live Telegram incident. Local suite 203 passed; lint, mypy and source
+secret scan passed. Scheduled collection continues; no historical outcomes changed.
