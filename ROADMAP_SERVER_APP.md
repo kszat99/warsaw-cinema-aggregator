@@ -916,3 +916,10 @@ attempted/finished history are not rewritten. Strict pre-showtime deadline appli
 only to T-2, not the restored checks. Existing serial pacing, request limits and
 failure/recovery alerts apply, with sanitized failure text retained. Late purchasing
 is a hypothesis to evaluate from observations, not an established fact.
+
+
+Deployment d79e2ea verified: 26 pending Wisła T0 jobs and 26 T+5 jobs across the
+current planning horizon. Lalka 114487 has pending 14:25, 14:28, 14:30 and 14:35
+checks (Warsaw time). Worker active, zero overdue jobs. Existing labelled manual
+11:54 diagnostic remains separate from the 14:30 scheduled check. Local suite
+194 passed; lint, mypy and source secret scan passed.
