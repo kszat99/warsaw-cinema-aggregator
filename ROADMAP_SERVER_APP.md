@@ -632,7 +632,8 @@ created or counted missed. 178 tests passed, including restart/dedup/jitter, no-
 late-claim skip, late-result rejection and no request after cutoff. Lint/types/source
 secret checks passed. Deployed without schema migration. VPS confirms no pending
 Wisła T/T+5 jobs and all historical offsets queued; next review is actual load,
-coverage and Wisła T-2 success. Original Kura incident remains unresolved.
+coverage and Wisła T-2 success. Original Kura incident remains unresolved. Release ffdeec5 deployed; all Linux/Windows
+and security CI passed: https://github.com/kszat99/warsaw-cinema-aggregator/actions/runs/36839405951.
 
 
 September 30, Wisła pilot: fresh MSI session requires date-specific returnlink; a
