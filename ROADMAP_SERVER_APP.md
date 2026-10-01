@@ -10,7 +10,7 @@ October 1 transient HTTP retry: HTTP 500/502/503/504 now qualify for the existin
 single delayed retry (30 seconds), only for scheduled checks with enough request
 budget inside the original deadline. Provider pacing and cooldowns still apply.
 Both attempts remain in SQLite; no historical failed jobs are automatically replayed.
-Deployment verification pending.
+Deployed as 7218097; worker active and installed retry policy verified. All 222 tests, lint, type checks and source secret scan passed.
 
 
 October 1 Cinema City expansion: all seven venues from the legacy page passed fresh
