@@ -941,3 +941,13 @@ is still under observation; unavailable/redirected pages do not imply zero seats
 VPS live readiness: October 2 Lalka 11:45, event 47593, 128 available /30 unavailable
 /158 capacity. Regular refresh automatically includes Atlantic today/tomorrow.
 Ten venues /20 date scopes at 45s spacing fit the existing 30-minute service timeout.
+
+
+Atlantic deployment 3da30ca verified: today 6 screenings, tomorrow 13, accepted
+seed run 95372df80e99434d804bd25a11d4a123. 186 future scheduled windows queued.
+Background worker saved labelled diagnostic for today's Lalka 13:45, event 47590:
+154 available /67 unavailable /221 capacity, hall B corroborated. Zero overdue
+jobs; worker active. First scheduled checks around 13:00 Warsaw. Full suite 198
+passed; strict lint, mypy, source secret scan and all three CI OS/Python jobs plus
+security job passed (run 36851814233). Review sustained Atlantic checks and T0/T+5
+closure evidence before calling the new venue stable.
