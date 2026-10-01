@@ -1,6 +1,6 @@
 # Warsaw Cinema Aggregator — Server App Roadmap
 
-Updated: 2026-09-30. **Status: Kinoteka, Cinema City Arkadia and Novekino Wisła automatic collection deployed on the VPS.**
+Updated: 2026-10-01. **Status: automatic seat collection deployed for Kinoteka, all seven configured Cinema City venues, Novekino Wisła, Novekino Atlantic and Amondo (11 venues).**
 
 This is the working plan for a maintainable server application and an L2/support/incident engineering portfolio project. Reliability must be demonstrated through measurements and recovery exercises. Smoke tests establish that sampled requests worked, not production guarantees.
 
@@ -12,7 +12,7 @@ matching prevents selecting a different screening. Historical offsets plus T-5,
 T-2, T0 and T+5 remain experimental; provider sales stop/status and event ID are
 stored in bounded diagnostics. Missing listing is not proof of cutoff or sold out.
 No layout-capacity fallback from available-seat count. Existing retries, SQLite,
-health and failure/recovery alerts apply. Deployment verification pending.
+health and failure/recovery alerts apply. Deployed as c7c8da9; worker active, eight screenings imported, 85 future scheduled jobs verified. Saved production diagnostic: Stop Making Sense at 20:45, 12 available / 8 unavailable / 20 capacity. Direct probe of Do utraty tchu at 17:30: 20/0/20. Same-show links on different dates retain independent jobs.
 
 
 October 1 transient HTTP retry: HTTP 500/502/503/504 now qualify for the existing
