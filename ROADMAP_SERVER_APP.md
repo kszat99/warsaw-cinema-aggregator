@@ -881,3 +881,11 @@ Retention follows observation history for now; response captures are bounded per
 At 11:47 Warsaw, Cinema City scheduled coverage was Arkadia 319/319, Bemowo 21/21,
 Sadyba IMAX 1/1, Mokotów 16/16, Promenada 22/22, Północna 23/23 and Janki 18/18,
 with no missed checks. New venues still require sustained observation.
+
+
+Deployment evidence: 12a47da installed on VPS with integrity-checked pre-migration
+backup backup-pre-diagnostics-20261001.sqlite3; schema 0008_seat_diagnostics and worker
+active. Labelled diagnostic job 3f406b9b0f704d379ee999a56935d722 for Wisła Lalka 114487
+completed successfully, saved 483 available /16 unavailable /499 and persisted the
+482-control discrepancy in diagnostics_json. Zero overdue jobs after verification.
+Local full suite: 191 passed; strict lint, mypy and source secret scan passed.
