@@ -80,11 +80,30 @@ def parse(response: httpx.Response) -> dict[str, Any]:
         not 0 < capacity <= 5000
         or not 0 <= available <= capacity
         or len(ids) != len(set(ids))
-        or len(seats) != available
         or any(seat.has_attr("disabled") for seat in seats)
     ):
         raise ValueError("Seat counts disagree")
+    diagnostics = None
+    if len(seats) != available:
+        # MSI's published availability includes seats absent from its selectable list.
+        # Accept its explicit counter only with independent hall-capacity corroboration.
+        hall = soup.select_one("#SeatCount")
+        if (
+            hall is None
+            or str(hall.get("value")) != str(capacity)
+            or not 0 < len(seats) < available
+        ):
+            raise ValueError("Seat counts disagree")
+        diagnostics = dict(
+            phase="seat_map",
+            reason="provider_counter_differs_from_controls",
+            count_source="published_availability",
+            available_controls=len(seats),
+            published_available=available,
+            corroborated_capacity=capacity,
+        )
     return dict(
+        diagnostics=diagnostics,
         outcome="success",
         available=available,
         unavailable=capacity - available,
@@ -103,6 +122,8 @@ def probe(
         available=None, unavailable=None, capacity=None, http_status=None, cooldown_ms=0
     )
     client.cookies.clear()
+    phase = "identity"
+    last_response = None
     try:
         if not re.fullmatch(r"[0-9]{1,12}", event):
             raise ValueError("Invalid event")
@@ -123,7 +144,11 @@ def probe(
                 )
             )
         )
-        request(client, "GET", repertoire, finish_before_ms=finish_before_ms)
+        phase = "repertoire"
+        last_response = request(
+            client, "GET", repertoire, finish_before_ms=finish_before_ms
+        )
+        phase = "handshake"
         landing = request(
             client,
             "GET",
@@ -131,6 +156,7 @@ def probe(
             headers={"Referer": repertoire},
             finish_before_ms=finish_before_ms,
         )
+        last_response = landing
         soup = BeautifulSoup(landing.text, "lxml")
         values = {
             str(n["name"]): str(n.get("value", ""))
@@ -147,6 +173,7 @@ def probe(
         if random is None or not random.get("value") or field is None:
             raise ValueError("Session handshake unavailable")
         values[field] = str(random["value"])
+        phase = "seat_map"
         response = request(
             client,
             "POST",
@@ -155,10 +182,13 @@ def probe(
             headers={"Referer": str(landing.url)},
             finish_before_ms=finish_before_ms,
         )
-        result.update(http_status=response.status_code, **parse(response))
+        last_response = response
+        result["http_status"] = response.status_code
+        result.update(parse(response))
     except CutoffExpired:
         result["outcome"] = "deadline_exceeded"
     except httpx.HTTPStatusError as exc:
+        last_response = exc.response
         status = exc.response.status_code
         result.update(
             http_status=status,
@@ -173,8 +203,29 @@ def probe(
         result["outcome"] = "timeout"
     except httpx.HTTPError as exc:
         result["outcome"] = transport_outcome(exc)
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError) as exc:
         result["outcome"] = "invalid_data"
+        result["diagnostics"] = {"phase": phase, "reason": str(exc)[:200]}
     finally:
+        if result.get("outcome") != "success" and last_response is not None:
+            soup = BeautifulSoup(last_response.text, "lxml")
+            for node in soup.select("script, style, input, textarea"):
+                node.decompose()
+            available_controls = len(
+                BeautifulSoup(last_response.text, "lxml").select(
+                    'input[type="checkbox"][id*="seatCheckbox"]'
+                )
+            )
+            visible = soup.get_text(" ", strip=True)
+            details = result.setdefault("diagnostics", {})
+            details.update(
+                phase=phase,
+                path=last_response.url.path,
+                response_text=visible[:24000],
+                response_text_truncated=len(visible) > 24000,
+                response_bytes=len(last_response.content),
+                available_controls=available_controls,
+            )
+            result["http_status"] = result["http_status"] or last_response.status_code
         client.cookies.clear()
     return result

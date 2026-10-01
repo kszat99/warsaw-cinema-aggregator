@@ -91,9 +91,49 @@ def test_identity_rejects_other_hosts_and_duplicate_events():
 
 
 def test_final_probe_never_starts_after_cutoff(monkeypatch):
-    monkeypatch.setattr('cinema_agg.server.wisla_probe.time.time', lambda: START/1000)
+    monkeypatch.setattr("cinema_agg.server.wisla_probe.time.time", lambda: START / 1000)
     client, calls = client_for()
     with client:
-        result = probe(client, '114926', START, finish_before_ms=START)
-    assert result['outcome'] == 'deadline_exceeded'
+        result = probe(client, "114926", START, finish_before_ms=START)
+    assert result["outcome"] == "deadline_exceeded"
     assert not calls
+
+
+def test_failure_evidence_excludes_framework_secrets():
+    client, _ = client_for("handshake")
+    with client:
+        result = probe(client, "114926", START)
+    assert result["http_status"] == 200
+    assert result["diagnostics"]["phase"] == "handshake"
+    assert result["diagnostics"]["response_text"] == "generic error"
+
+
+def test_corroborated_published_counts_can_differ_from_selectable_controls():
+    from cinema_agg.server.wisla_probe import parse
+
+    response = httpx.Response(
+        200,
+        text=MAP.replace("miejsc: 2", "miejsc: 3")
+        + '<input type="hidden" id="SeatCount" value="120">',
+        request=httpx.Request("GET", ORIGIN + "/MSI/OrderTickets.aspx"),
+    )
+    result = parse(response)
+    assert result["available"] == 3
+    assert result["unavailable"] == 117
+    assert result["diagnostics"]["available_controls"] == 2
+
+
+def test_failure_evidence_strips_scripts_inputs_and_caps_text():
+    def handler(request):
+        return httpx.Response(
+            200,
+            text='<script>secret-cookie</script><input value="secret-state">'
+            + "x" * 30000,
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = probe(client, "114926", START)
+    evidence = result["diagnostics"]["response_text"]
+    assert "secret" not in evidence
+    assert len(evidence) == 24000
+    assert result["diagnostics"]["response_text_truncated"]

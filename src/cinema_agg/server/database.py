@@ -8,7 +8,7 @@ from alembic.config import Config
 from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.pool import NullPool
 
-SCHEMA_REVISION = "0007_refresh_evidence"
+SCHEMA_REVISION = "0008_seat_diagnostics"
 
 
 class SchemaUnavailable(Exception):

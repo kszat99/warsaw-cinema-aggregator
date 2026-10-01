@@ -162,6 +162,7 @@ def report(path: Path, now: int, hours: int = 24) -> dict[str, Any]:
                         "j.purpose,j.state,j.due_at_ms,j.deadline_ms,o.id "
                         "AS attempt_id, "
                         "o.attempted_at_ms,o.finished_at_ms,o.outcome,o.http_status, "
+                        "o.diagnostics_json, "
                         "o.available,o.unavailable,o.capacity FROM seat_observations o "
                         "JOIN seat_jobs j ON j.id=o.job_id "
                         "WHERE o.attempted_at_ms BETWEEN :since AND :now "
@@ -404,7 +405,7 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             "manual check"
             if job["purpose"] == "diagnostic"
             else (
-                f"within {(job['deadline_ms']-job['due_at_ms'])/1000:g}s allowance"
+                f"within {(job['deadline_ms'] - job['due_at_ms']) / 1000:g}s allowance"
                 if actual <= job["deadline_ms"]
                 else "OUTSIDE allowance"
             )
@@ -416,6 +417,19 @@ def job_lines(job: dict[str, Any], *, attempt: bool = False) -> list[str]:
             f"    Finished: {local_time(job['finished_at_ms'])} | "
             f"Result: {safe_label(job['outcome'])} | HTTP: {job['http_status']}"
         )
+        if job.get("diagnostics_json"):
+            details = json.loads(job["diagnostics_json"])
+            lines.append(
+                "    Evidence: "
+                + safe_label(str(details.get("phase", "unknown")))
+                + " | "
+                + safe_label(str(details.get("reason", "response captured")))
+                + " | "
+                + safe_label(str(details.get("path", "")))
+            )
+            lines.append(
+                "    Sanitized response text retained in SQLite diagnostics_json."
+            )
         if job["available"] is not None:
             lines.append(
                 f"    Seats: {job['available']} available / "

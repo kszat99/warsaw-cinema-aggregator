@@ -420,3 +420,27 @@ Terminal attempt lines show each job's actual allowance. Historical times are ta
 times, not a guarantee of exact-minute sampling; use actual attempt timestamps in analysis.
 Early Wisła network failures may now have sufficient time for the existing single retry;
 near-start Wisła still does not. Combined load needs observation under real failures.
+
+
+## October 1: Wisła failure evidence and published seat counters
+
+Investigated Lalka event 114487 (14:30): live response publishes 483 available /499
+capacity, but contains 482 unique selectable checkboxes. Strict equality incorrectly
+rejects this valid page. The parser now accepts published availability on a partial
+selectable list only when the separate SeatCount field agrees with published capacity;
+duplicated/disabled controls, missing capacity corroboration and impossible counts
+still fail. The exact reason for MSI's one-seat discrepancy is unconfirmed; these
+are provider-published availability counts, not proof of ticket purchases.
+
+Schema 0008_seat_diagnostics retains bounded (24,000 characters) sanitized response
+text, phase, page path, HTTP status and parsing reason for failed Wisła observations.
+Scripts/styles/inputs/textareas are removed: cookies, headers and hidden ASP.NET
+state are not retained. Evidence is in seat_observations.diagnostics_json and journal;
+status shows phase/reason/path without dumping the whole page. Published-count versus
+control-count discrepancies are also retained on successful observations. Historical
+failures remain unknown; no inferred counts or retrospective recoveries are fabricated.
+Retention follows observation history for now; response captures are bounded per record.
+
+At 11:47 Warsaw, Cinema City scheduled coverage was Arkadia 319/319, Bemowo 21/21,
+Sadyba IMAX 1/1, Mokotów 16/16, Promenada 22/22, Północna 23/23 and Janki 18/18,
+with no missed checks. New venues still require sustained observation.

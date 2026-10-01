@@ -492,9 +492,17 @@ def finish(
             text(
                 "UPDATE seat_observations SET finished_at_ms=:now,outcome=:outcome,"
                 "available=:available,unavailable=:unavailable,capacity=:capacity,"
-                "http_status=:http_status WHERE id=:token"
+                "http_status=:http_status,diagnostics_json=:diagnostics_json "
+                "WHERE id=:token"
             ),
-            {**result, "now": now, "token": job["claim_token"]},
+            {
+                **result,
+                "diagnostics_json": json.dumps(result["diagnostics"], ensure_ascii=True)
+                if result.get("diagnostics")
+                else None,
+                "now": now,
+                "token": job["claim_token"],
+            },
         )
         connection.execute(
             text(
