@@ -14,6 +14,11 @@ Resident Evil at later offset). Worker restarted at 17:12:41 after SQLITE_BUSY
 while checking journal mode during connection setup, outside BEGIN retries.
 Add two bounded setup-check retries, close connections on failed initialization,
 and retain all original incident evidence. No cutoff observations are disabled.
+Deployed 93e1b09; worker active and installed setup retry/database access verified.
+233 tests plus lint/type/source secret checks pass. Lock holder is not identified.
+Next: show last successful pre-start counts alongside availability notices and
+separate expected cutoff experiments from actionable collector incidents without
+hiding evidence or assuming that missing listings prove closed sales.
 
 
 October 1 Amondo integration: dedicated independently paced provider queue;
