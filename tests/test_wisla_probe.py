@@ -139,7 +139,8 @@ def test_failure_evidence_strips_scripts_inputs_and_caps_text():
     assert result["diagnostics"]["response_text_truncated"]
 
 
-def test_atlantic_redirect_referer_and_capacity():
+@pytest.mark.parametrize("transaction", [0, 1])
+def test_atlantic_redirect_referer_and_capacity(transaction):
     from cinema_agg.server.wisla_probe import ATLANTIC_ORIGIN
 
     calls = []
@@ -150,9 +151,10 @@ def test_atlantic_redirect_referer_and_capacity():
         if request.url.path == "/MSI/mvc/pl":
             return httpx.Response(
                 200,
-                text='<a href="/MSI/Default.aspx?event_id=123&amp;typetran=0">Buy</a>',
+                text=f'<a href="/MSI/Default.aspx?event_id=123&amp;typetran={transaction}">Buy</a>',
             )
         if request.method == "POST":
+            assert request.url.params["typetran"] == "0"
             data = parse_qs(request.content.decode())
             assert data["ctl$hdnServer"] == ["framework-server"]
             assert "seatCheckboxBad" not in data

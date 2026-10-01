@@ -201,8 +201,10 @@ def probe(
                     continue
                 if identity == event and parse_qs(urlsplit(candidate).query).get(
                     "typetran"
-                ) == ["0"]:
-                    candidates.append(candidate)
+                ) in (["0"], ["1"]):
+                    candidates.append(
+                        re.sub(r"([?&]typetran=)1(?=&|$)", r"\g<1>0", candidate)
+                    )
             if not candidates:
                 raise ValueError("Booking link absent from Atlantic repertoire")
             entry = candidates[0]

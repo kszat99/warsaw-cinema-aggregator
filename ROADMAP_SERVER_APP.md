@@ -951,3 +951,12 @@ jobs; worker active. First scheduled checks around 13:00 Warsaw. Full suite 198
 passed; strict lint, mypy, source secret scan and all three CI OS/Python jobs plus
 security job passed (run 36851814233). Review sustained Atlantic checks and T0/T+5
 closure evidence before calling the new venue stable.
+
+
+Atlantic follow-up: Verity 48057 T-24h failed because repertoire lookup required
+purchase typetran=0, while the cinema advertises this event using typetran=1. The
+saved response includes Verity Friday 13:00: event was not actually absent. Lookup
+now accepts either advertised transaction mode for the validated event and converts
+the entry to purchase typetran=0 before the read-only handshake. No seats are selected.
+Regression covers both link modes. Previous missing-link alert reflects our lookup
+bug, not proof of cancellation, sold-out status or sales closure.

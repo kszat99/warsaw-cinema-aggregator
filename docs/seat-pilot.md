@@ -482,3 +482,12 @@ is still under observation; unavailable/redirected pages do not imply zero seats
 VPS live readiness: October 2 Lalka 11:45, event 47593, 128 available /30 unavailable
 /158 capacity. Regular refresh automatically includes Atlantic today/tomorrow.
 Ten venues /20 date scopes at 45s spacing fit the existing 30-minute service timeout.
+
+
+Atlantic follow-up: Verity 48057 T-24h failed because repertoire lookup required
+purchase typetran=0, while the cinema advertises this event using typetran=1. The
+saved response includes Verity Friday 13:00: event was not actually absent. Lookup
+now accepts either advertised transaction mode for the validated event and converts
+the entry to purchase typetran=0 before the read-only handshake. No seats are selected.
+Regression covers both link modes. Previous missing-link alert reflects our lookup
+bug, not proof of cancellation, sold-out status or sales closure.
