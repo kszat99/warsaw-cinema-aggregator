@@ -1,120 +1,120 @@
 {
-  "generated_at": "2026-10-13T08:41:02.804297",
+  "generated_at": "2026-10-14T08:55:56.766661",
   "threshold_days": 3,
   "alerts": [],
   "cinemas": {
     "wisla": {
       "name": "Novekino Wisła",
       "adapter": "novekino",
-      "screenings": 41,
+      "screenings": 117,
       "zero_streak": 0
     },
     "atlantic": {
       "name": "Novekino Atlantic",
       "adapter": "novekino",
-      "screenings": 37,
+      "screenings": 85,
       "zero_streak": 0
     },
     "muranow": {
       "name": "Kinomuranów",
       "adapter": "muranow",
-      "screenings": 70,
+      "screenings": 61,
       "zero_streak": 0
     },
     "luna": {
       "name": "Kino Luna",
       "adapter": "bilety24",
-      "screenings": 150,
+      "screenings": 140,
       "zero_streak": 0
     },
     "elektronik": {
       "name": "Kino Elektronik",
       "adapter": "bilety24",
-      "screenings": 18,
+      "screenings": 16,
       "zero_streak": 0
     },
     "kinoteka": {
       "name": "Kinoteka",
       "adapter": "kinoteka",
-      "screenings": 258,
+      "screenings": 255,
       "zero_streak": 0
     },
     "1074": {
       "name": "Cinema City Arkadia",
       "adapter": "cinema_city",
-      "screenings": 249,
+      "screenings": 686,
       "zero_streak": 0
     },
     "1061": {
       "name": "Cinema City Bemowo",
       "adapter": "cinema_city",
-      "screenings": 158,
+      "screenings": 463,
       "zero_streak": 0
     },
     "1060": {
       "name": "Cinema City Sadyba",
       "adapter": "cinema_city",
-      "screenings": 16,
+      "screenings": 36,
       "zero_streak": 0
     },
     "1070": {
       "name": "Cinema City Galeria Mokotów",
       "adapter": "cinema_city",
-      "screenings": 224,
+      "screenings": 615,
       "zero_streak": 0
     },
     "1068": {
       "name": "Cinema City Promenada",
       "adapter": "cinema_city",
-      "screenings": 197,
+      "screenings": 566,
       "zero_streak": 0
     },
     "1096": {
       "name": "Cinema City Galeria Północna (Białołęka)",
       "adapter": "cinema_city",
-      "screenings": 162,
+      "screenings": 454,
       "zero_streak": 0
     },
     "1069": {
       "name": "Cinema City Janki",
       "adapter": "cinema_city",
-      "screenings": 139,
+      "screenings": 404,
       "zero_streak": 0
     },
     "0040": {
       "name": "Multikino Młociny",
       "adapter": "multikino",
-      "screenings": 148,
+      "screenings": 406,
       "zero_streak": 0
     },
     "0013": {
       "name": "Multikino Złote Tarasy",
       "adapter": "multikino",
-      "screenings": 109,
+      "screenings": 290,
       "zero_streak": 0
     },
     "0052": {
       "name": "Multikino Reduta",
       "adapter": "multikino",
-      "screenings": 85,
+      "screenings": 245,
       "zero_streak": 0
     },
     "0024": {
       "name": "Multikino Targówek",
       "adapter": "multikino",
-      "screenings": 163,
+      "screenings": 501,
       "zero_streak": 0
     },
     "0025": {
       "name": "Multikino Wola Park",
       "adapter": "multikino",
-      "screenings": 72,
+      "screenings": 232,
       "zero_streak": 0
     },
     "57": {
       "name": "Helios Blue City",
       "adapter": "helios",
-      "screenings": 45,
+      "screenings": 61,
       "zero_streak": 0
     },
     "iluzjon": {
@@ -126,13 +126,13 @@
     "kultura": {
       "name": "Kino Kultura",
       "adapter": "kultura",
-      "screenings": 29,
+      "screenings": 27,
       "zero_streak": 0
     },
     "amondo": {
       "name": "Kino Amondo",
       "adapter": "amondo",
-      "screenings": 5,
+      "screenings": 20,
       "zero_streak": 0
     },
     "ujazdowski": {
@@ -144,14 +144,14 @@
   },
   "adapters": {
     "amondo": {
-      "screenings": 5,
+      "screenings": 20,
       "cinemas": [
         "amondo"
       ],
       "zero_streak": 0
     },
     "bilety24": {
-      "screenings": 168,
+      "screenings": 156,
       "cinemas": [
         "luna",
         "elektronik"
@@ -159,7 +159,7 @@
       "zero_streak": 0
     },
     "cinema_city": {
-      "screenings": 1145,
+      "screenings": 3224,
       "cinemas": [
         "1074",
         "1061",
@@ -172,7 +172,7 @@
       "zero_streak": 0
     },
     "helios": {
-      "screenings": 45,
+      "screenings": 61,
       "cinemas": [
         "57"
       ],
@@ -186,21 +186,21 @@
       "zero_streak": 0
     },
     "kinoteka": {
-      "screenings": 258,
+      "screenings": 255,
       "cinemas": [
         "kinoteka"
       ],
       "zero_streak": 0
     },
     "kultura": {
-      "screenings": 29,
+      "screenings": 27,
       "cinemas": [
         "kultura"
       ],
       "zero_streak": 0
     },
     "multikino": {
-      "screenings": 577,
+      "screenings": 1674,
       "cinemas": [
         "0040",
         "0013",
@@ -211,14 +211,14 @@
       "zero_streak": 0
     },
     "muranow": {
-      "screenings": 70,
+      "screenings": 61,
       "cinemas": [
         "muranow"
       ],
       "zero_streak": 0
     },
     "novekino": {
-      "screenings": 78,
+      "screenings": 202,
       "cinemas": [
         "wisla",
         "atlantic"
