@@ -3,7 +3,9 @@ param(
     [string]$Branch = "main",
     [switch]$Force,
     [string]$PythonExecutable = "",
-    [string]$StateDir = (Join-Path $env:LOCALAPPDATA "WarsawCinemaAggregator")
+    [string]$StateDir = (Join-Path $env:LOCALAPPDATA "WarsawCinemaAggregator"),
+    [ValidateRange(1, 20)][int]$NetworkAttempts = 6,
+    [ValidateRange(0, 60)][int]$NetworkRetrySeconds = 15
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,7 +22,8 @@ if (Test-Path -LiteralPath $routePath) {
         if (-not (Test-Path -LiteralPath $liveScript)) { throw "Live refresh script not found: $liveScript" }
         Write-Host "Delegating scheduled refresh to live checkout: $resolvedLive"
         $launchArgs = @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", $liveScript,
-            "-RepoRoot", $resolvedLive, "-Branch", $Branch, "-StateDir", $StateDir)
+            "-RepoRoot", $resolvedLive, "-Branch", $Branch, "-StateDir", $StateDir,
+            "-NetworkAttempts", $NetworkAttempts, "-NetworkRetrySeconds", $NetworkRetrySeconds)
         if ($Force) { $launchArgs += "-Force" }
         if ($PythonExecutable) { $launchArgs += @("-PythonExecutable", $PythonExecutable) }
         $ErrorActionPreference = "Continue"
@@ -103,9 +106,6 @@ try {
         }
     }
 
-    Invoke-CheckedGit -GitArgs @("fetch", "origin", $Branch) | ForEach-Object { Write-Host $_ }
-    Invoke-CheckedGit -GitArgs @("merge", "--ff-only", "origin/$Branch") | ForEach-Object { Write-Host $_ }
-
     if (-not $PythonExecutable) {
         $PythonExecutable = Join-Path $RepoRoot ".venv\Scripts\python.exe"
     }
@@ -117,6 +117,50 @@ try {
     $env:PYTHONUNBUFFERED = "1"
     $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
     [Console]::OutputEncoding = $OutputEncoding
+
+    # Check DNS in the same Python runtime that fetches schedules. Git can
+    # connect successfully while Python still cannot resolve cinema hosts.
+    $networkCheck = @'
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlsplit
+from src.cinema_agg.config import CINEMAS
+
+hosts = sorted({urlsplit(c.url).hostname for c in CINEMAS} | {'github.com', 'www.multikino.pl'})
+def resolve(host):
+    try:
+        socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        return None
+    except OSError:
+        return host
+with ThreadPoolExecutor(max_workers=8) as pool:
+    failed = [host for host in pool.map(resolve, hosts) if host]
+if failed:
+    print('DNS not ready for: ' + ', '.join(failed), flush=True)
+    raise SystemExit(1)
+print('Cinema DNS checks passed.', flush=True)
+'@
+    $networkReady = $false
+    for ($attempt = 1; $attempt -le $NetworkAttempts; $attempt++) {
+        Write-Host "Checking network readiness ($attempt/$NetworkAttempts)..."
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            & $PythonExecutable -c $networkCheck 2>&1 | ForEach-Object { Write-Host ([string]$_) }
+            $networkExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        if ($networkExitCode -eq 0) { $networkReady = $true; break }
+        if ($attempt -lt $NetworkAttempts) { Start-Sleep -Seconds $NetworkRetrySeconds }
+    }
+    if (-not $networkReady) {
+        throw "Cinema DNS checks failed. No data published; the scheduled task will retry."
+    }
+
+    Invoke-CheckedGit -GitArgs @("fetch", "origin", $Branch) | ForEach-Object { Write-Host $_ }
+    Invoke-CheckedGit -GitArgs @("merge", "--ff-only", "origin/$Branch") | ForEach-Object { Write-Host $_ }
+
     $env:MULTIKINO_REQUEST_DELAY_SECONDS = "0"
     $env:MULTIKINO_RETRY_DELAYS_SECONDS = "0"
     $previousPreference = $ErrorActionPreference

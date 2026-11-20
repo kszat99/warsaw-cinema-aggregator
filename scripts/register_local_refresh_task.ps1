@@ -27,13 +27,19 @@ if ($Daily) {
     $triggers += New-ScheduledTaskTrigger -Daily -At $DailyAt
 }
 if ($AtLogOn) {
-    $triggers += New-ScheduledTaskTrigger -AtLogOn
+    $logonTrigger = New-ScheduledTaskTrigger -AtLogOn
+    $logonTrigger.Delay = "PT2M"
+    $triggers += $logonTrigger
 }
 
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
+    -RunOnlyIfNetworkAvailable `
+    -RestartCount 6 `
+    -RestartInterval (New-TimeSpan -Minutes 15) `
+    -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Hours 4)
 
 $principal = New-ScheduledTaskPrincipal `

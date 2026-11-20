@@ -35,7 +35,7 @@ class LocalRefreshTests(unittest.TestCase):
         self.git('push', 'origin', 'main')
         self.fake_python = self.root / 'python.cmd'
         self.fake_python.write_text(
-            '@echo off\necho harmless native stderr 1>&2\n'
+            '@echo off\nif "%~1"=="-c" exit /b 0\necho harmless native stderr 1>&2\n'
             '>dist\\showtimes.json echo {"test":true}\nexit /b 0\n', encoding='ascii'
         )
 
@@ -49,6 +49,7 @@ class LocalRefreshTests(unittest.TestCase):
             '-File', str(SCRIPT), '-RepoRoot', str(self.repo),
             '-StateDir', str(self.state), '-PythonExecutable', str(self.fake_python),
             '-Force',
+            '-NetworkAttempts', '2', '-NetworkRetrySeconds', '0',
         ], capture_output=True, encoding='utf-8', timeout=40)
 
     def assert_failed(self, result):
@@ -64,7 +65,7 @@ class LocalRefreshTests(unittest.TestCase):
 
     def test_build_failure_does_not_commit_or_mark_success(self):
         before = self.git('rev-parse', 'HEAD')
-        self.fake_python.write_text('@echo off\necho build failed 1>&2\nexit /b 7\n')
+        self.fake_python.write_text('@echo off\nif "%~1"=="-c" exit /b 0\necho build failed 1>&2\nexit /b 7\n')
         self.assert_failed(self.run_refresh())
         self.assertEqual(before, self.git('rev-parse', 'HEAD'))
 
@@ -77,6 +78,32 @@ class LocalRefreshTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         logs = list((self.state / 'logs').glob('*.log'))
         self.assertIn('\u0141\u00f3d\u017a', logs[0].read_text(encoding='utf-8-sig'))
+
+    def test_dns_failure_does_not_build_or_publish(self):
+        before = self.git('rev-parse', 'HEAD')
+        self.fake_python.write_text(
+            '@echo off\nif "%~1"=="-c" exit /b 1\n'
+            '>build-started.txt echo unexpected\nexit /b 0\n', encoding='ascii'
+        )
+        result = self.run_refresh()
+        self.assert_failed(result)
+        self.assertIn('Checking network readiness (2/2)', result.stdout)
+        self.assertFalse((self.repo / 'build-started.txt').exists())
+        self.assertEqual(before, self.git('rev-parse', 'HEAD'))
+        self.assertEqual(before, self.git('rev-parse', 'origin/main'))
+
+    def test_dns_recovers_before_build(self):
+        self.fake_python.write_text(
+            '@echo off\nif not "%~1"=="-c" goto build\n'
+            'if exist dns-attempted.txt exit /b 0\n'
+            '>dns-attempted.txt echo attempted\nexit /b 1\n'
+            ':build\n>dist\\showtimes.json echo {"test":true}\nexit /b 0\n', encoding='ascii'
+        )
+        result = self.run_refresh()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Checking network readiness (2/2)', result.stdout)
+        self.assertTrue((self.state / 'last_success_date.txt').exists())
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.git('rev-parse', 'origin/main'))
 
     def test_development_branch_is_rejected(self):
         self.git('switch', '-c', 'codex/server-app')
