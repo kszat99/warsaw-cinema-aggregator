@@ -43,13 +43,14 @@ class LocalRefreshTests(unittest.TestCase):
         return subprocess.run(['git', *args], cwd=self.repo, capture_output=True,
                               text=True, check=True).stdout.strip()
 
-    def run_refresh(self):
+    def run_refresh(self, retry_attempts=0):
         return subprocess.run([
             'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
             '-File', str(SCRIPT), '-RepoRoot', str(self.repo),
             '-StateDir', str(self.state), '-PythonExecutable', str(self.fake_python),
             '-Force',
             '-NetworkAttempts', '2', '-NetworkRetrySeconds', '0',
+            '-RetryAttempts', str(retry_attempts), '-RetryDelaySeconds', '0',
         ], capture_output=True, encoding='utf-8', timeout=40)
 
     def assert_failed(self, result):
@@ -105,6 +106,20 @@ class LocalRefreshTests(unittest.TestCase):
         self.assertTrue((self.state / 'last_success_date.txt').exists())
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.git('rev-parse', 'origin/main'))
 
+    def test_failed_build_retries_and_releases_lock(self):
+        self.fake_python.write_text(
+            '@echo off\nif "%~1"=="-c" exit /b 0\n'
+            'if exist build-attempted.txt goto build\n'
+            '>build-attempted.txt echo attempted\nexit /b 7\n'
+            ':build\n>dist\\showtimes.json echo {"test":true}\nexit /b 0\n', encoding='ascii'
+        )
+        result = self.run_refresh(retry_attempts=1)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Will retry in 0 seconds (1 retries remaining)', result.stdout)
+        self.assertNotIn('Another local refresh is already running', result.stdout)
+        self.assertTrue((self.state / 'last_success_date.txt').exists())
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.git('rev-parse', 'origin/main'))
+
     def test_development_branch_is_rejected(self):
         self.git('switch', '-c', 'codex/server-app')
         self.assert_failed(self.run_refresh())
@@ -129,6 +144,7 @@ class LocalRefreshTests(unittest.TestCase):
             'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
             '-File', str(SCRIPT), '-RepoRoot', str(development),
             '-StateDir', str(self.state), '-PythonExecutable', str(self.fake_python), '-Force',
+            '-RetryAttempts', '0',
         ], capture_output=True, encoding='utf-8', timeout=40)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('Delegating scheduled refresh', result.stdout)

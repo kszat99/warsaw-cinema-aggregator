@@ -5,7 +5,9 @@ param(
     [string]$PythonExecutable = "",
     [string]$StateDir = (Join-Path $env:LOCALAPPDATA "WarsawCinemaAggregator"),
     [ValidateRange(1, 20)][int]$NetworkAttempts = 6,
-    [ValidateRange(0, 60)][int]$NetworkRetrySeconds = 15
+    [ValidateRange(0, 60)][int]$NetworkRetrySeconds = 15,
+    [ValidateRange(0, 6)][int]$RetryAttempts = 6,
+    [ValidateRange(0, 3600)][int]$RetryDelaySeconds = 900
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,7 +25,8 @@ if (Test-Path -LiteralPath $routePath) {
         Write-Host "Delegating scheduled refresh to live checkout: $resolvedLive"
         $launchArgs = @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", $liveScript,
             "-RepoRoot", $resolvedLive, "-Branch", $Branch, "-StateDir", $StateDir,
-            "-NetworkAttempts", $NetworkAttempts, "-NetworkRetrySeconds", $NetworkRetrySeconds)
+            "-NetworkAttempts", $NetworkAttempts, "-NetworkRetrySeconds", $NetworkRetrySeconds,
+            "-RetryAttempts", $RetryAttempts, "-RetryDelaySeconds", $RetryDelaySeconds)
         if ($Force) { $launchArgs += "-Force" }
         if ($PythonExecutable) { $launchArgs += @("-PythonExecutable", $PythonExecutable) }
         $ErrorActionPreference = "Continue"
@@ -44,6 +47,7 @@ try {
 }
 
 $transcribing = $false
+$retryRefresh = $false
 try {
     $logDir = Join-Path $StateDir "logs"
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -195,8 +199,26 @@ print('Cinema DNS checks passed.', flush=True)
     Write-Host "Local cinema data refreshed and pushed successfully."
 } catch {
     Write-Host ("REFRESH FAILED: " + $_.Exception.Message)
-    exit 1
+    if ($RetryAttempts -eq 0) { exit 1 }
+    $retryRefresh = $true
+    Write-Host "Will retry in $RetryDelaySeconds seconds ($RetryAttempts retries remaining)."
 } finally {
     if ($transcribing) { Stop-Transcript | Out-Null }
     $runLock.Dispose()
+}
+
+# Retry inside the existing task too: installing a Task Scheduler restart
+# policy may require administrator rights. Release the publication lock first.
+if ($retryRefresh) {
+    Start-Sleep -Seconds $RetryDelaySeconds
+    $retryArgs = @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath,
+        "-RepoRoot", $RepoRoot, "-Branch", $Branch, "-StateDir", $StateDir,
+        "-NetworkAttempts", $NetworkAttempts,
+        "-NetworkRetrySeconds", $NetworkRetrySeconds, "-RetryAttempts", ($RetryAttempts - 1),
+        "-RetryDelaySeconds", $RetryDelaySeconds)
+    if ($Force) { $retryArgs += "-Force" }
+    if ($PythonExecutable) { $retryArgs += @("-PythonExecutable", $PythonExecutable) }
+    $ErrorActionPreference = "Continue"
+    & powershell.exe @retryArgs
+    exit $LASTEXITCODE
 }
