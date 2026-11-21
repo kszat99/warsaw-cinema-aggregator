@@ -24,10 +24,9 @@ defaults:
     shell: bash
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # Separate jobs give the finalized artifact time to become discoverable by
+  # deploy-pages (https://github.com/actions/deploy-pages/issues/451).
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -48,6 +47,16 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository for cinema health check
+        uses: actions/checkout@v5
 
       - name: Deploy to GitHub Pages
         id: deployment
